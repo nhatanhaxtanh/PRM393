@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
+import '../../services/batch_service.dart';
 
-class BatchDetailScreen extends StatelessWidget {
+class BatchDetailScreen extends StatefulWidget {
   final BatchInfo batch;
   final VoidCallback onBack;
   final ValueChanged<ReviewInfo> onReviewSelected;
@@ -13,19 +14,32 @@ class BatchDetailScreen extends StatelessWidget {
     required this.onReviewSelected,
   });
 
+  @override
+  State<BatchDetailScreen> createState() => _BatchDetailScreenState();
+}
+
+class _BatchDetailScreenState extends State<BatchDetailScreen> {
   static const _navy = Color(0xFF1B2D8B);
   static const _orange = Color(0xFFF97316);
 
-  static const _submissions = [
-    _Submission(id: 'SE123456', name: 'Nguyen Van An',    time: '2026-05-20 14:30', score: null),
-    _Submission(id: 'SE123457', name: 'Tran Thi Binh',    time: '2026-05-20 15:12', score: 8.5),
-    _Submission(id: 'SE123458', name: 'Le Van Cuong',     time: '2026-05-20 16:45', score: 7.0),
-    _Submission(id: 'SE123459', name: 'Pham Thi Dung',    time: '2026-05-20 13:20', score: null),
-    _Submission(id: 'SE123460', name: 'Hoang Van En',     time: '2026-05-20 14:55', score: null),
-    _Submission(id: 'SE123461', name: 'Vo Thi Phuong',    time: '2026-05-20 16:10', score: 9.0),
-    _Submission(id: 'SE123462', name: 'Nguyen Thi Giang', time: '2026-05-20 15:40', score: null),
-    _Submission(id: 'SE123463', name: 'Bui Thi Ha',       time: '2026-05-20 17:05', score: 6.5),
-  ];
+  List<StudentSubmission> _submissions = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubmissions();
+  }
+
+  Future<void> _loadSubmissions() async {
+    final submissions = await BatchService.getSubmissionsByBatch(widget.batch.batchId);
+    if (mounted) {
+      setState(() {
+        _submissions = submissions;
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +60,7 @@ class BatchDetailScreen extends StatelessWidget {
 
   Widget _backButton() {
     return GestureDetector(
-      onTap: onBack,
+      onTap: widget.onBack,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -59,7 +73,8 @@ class BatchDetailScreen extends StatelessWidget {
   }
 
   Widget _batchInfoCard() {
-    final isFirst = batch.examType == 'First Attempt';
+    final isFirst = widget.batch.examType == 'FIRST_ATTEMPT';
+    final typeLabel = isFirst ? 'First Attempt' : 'Retake';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -85,8 +100,8 @@ class BatchDetailScreen extends StatelessWidget {
                   spacing: 24,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    _metaItem('Campus:', batch.campus, isLink: true),
-                    _metaItem('Exam Code:', batch.examCode),
+                    _metaItem('Campus:', widget.batch.campus, isLink: true),
+                    _metaItem('Exam Code:', widget.batch.examCode),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -98,7 +113,7 @@ class BatchDetailScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            batch.examType,
+                            typeLabel,
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
@@ -108,7 +123,7 @@ class BatchDetailScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    _metaItem('Total Students:', batch.total.toString()),
+                    _metaItem('Total Students:', widget.batch.total.toString()),
                   ],
                 ),
               ],
@@ -132,8 +147,10 @@ class BatchDetailScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text('Grading Progress', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
               const SizedBox(height: 2),
-              Text('${batch.completed}/${batch.total}',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _orange)),
+              Text(
+                '${widget.batch.completed}/${widget.batch.total}',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _orange),
+              ),
             ],
           ),
         ],
@@ -176,12 +193,26 @@ class BatchDetailScreen extends StatelessWidget {
               style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
           const SizedBox(height: 20),
           _tableHeader(),
-          ...List.generate(_submissions.length, (i) => Column(
-            children: [
-              Divider(height: 1, color: Colors.grey.shade200),
-              _submissionRow(_submissions[i]),
-            ],
-          )),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_submissions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('No submissions found',
+                    style: TextStyle(color: Colors.grey.shade500)),
+              ),
+            )
+          else
+            ...List.generate(_submissions.length, (i) => Column(
+              children: [
+                Divider(height: 1, color: Colors.grey.shade200),
+                _submissionRow(_submissions[i]),
+              ],
+            )),
         ],
       ),
     );
@@ -203,36 +234,44 @@ class BatchDetailScreen extends StatelessWidget {
   }
 
   Widget _headerCell(String text) => Text(text,
-      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+      style: TextStyle(
+          fontSize: 11, fontWeight: FontWeight.w700,
           color: Colors.grey.shade500, letterSpacing: 0.5));
 
-  Widget _submissionRow(_Submission s) {
+  Widget _submissionRow(StudentSubmission s) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
-          Expanded(child: Text(s.id,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: _navy))),
-          Expanded(child: Text(s.name,
-              style: const TextStyle(fontSize: 14, color: Colors.black87))),
-          Expanded(child: Text(s.time,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600))),
+          Expanded(
+            child: Text(s.studentId,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: _navy)),
+          ),
+          Expanded(
+            child: Text(s.fullName,
+                style: const TextStyle(fontSize: 14, color: Colors.black87)),
+          ),
+          Expanded(
+            child: Text(s.submissionTime,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+          ),
           Expanded(
             flex: 2,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: s.score != null ? _gradedBadge(s.score!) : _notGradedBadge(),
+              child: s.isGraded ? _gradedBadge(s.totalScore!) : _notGradedBadge(),
             ),
           ),
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: ElevatedButton(
-                onPressed: () => onReviewSelected(ReviewInfo(
-                  studentId: s.id,
-                  studentName: s.name,
-                  examCode: batch.examCode,
-                  campus: batch.campus,
+                onPressed: () => widget.onReviewSelected(ReviewInfo(
+                  submissionId: s.submissionId,
+                  studentId: s.studentId,
+                  studentName: s.fullName,
+                  examCode: widget.batch.examCode,
+                  campus: widget.batch.campus,
                 )),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _orange,
@@ -256,11 +295,14 @@ class BatchDetailScreen extends StatelessWidget {
         decoration: BoxDecoration(
             color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(20)),
         child: const Text('Not Graded',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFE53935))),
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFE53935))),
       );
 
   Widget _gradedBadge(double score) {
-    final label = score == score.truncateToDouble() ? score.toInt().toString() : score.toString();
+    final label = score == score.truncateToDouble()
+        ? score.toInt().toString()
+        : score.toString();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
@@ -277,12 +319,4 @@ class BatchDetailScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Submission {
-  final String id;
-  final String name;
-  final String time;
-  final double? score;
-  const _Submission({required this.id, required this.name, required this.time, required this.score});
 }

@@ -25,12 +25,14 @@ class BatchInfo {
 }
 
 class ReviewInfo {
+  final int submissionId;
   final String studentId;
   final String studentName;
   final String examCode;
   final String campus;
 
   const ReviewInfo({
+    required this.submissionId,
     required this.studentId,
     required this.studentName,
     required this.examCode,
