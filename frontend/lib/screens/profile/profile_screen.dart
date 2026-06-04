@@ -1,10 +1,35 @@
 import 'package:flutter/material.dart';
+import '../../services/user_service.dart';
 
-class ProfileTab extends StatelessWidget {
+class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
+  @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
   static const _navy = Color(0xFF1B2D8B);
   static const _orange = Color(0xFFF97316);
+
+  UserProfile? _profile;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final profile = await UserService.getProfile();
+    if (mounted) {
+      setState(() {
+        _profile = profile;
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +49,10 @@ class ProfileTab extends StatelessWidget {
           ),
           const SizedBox(height: 28),
 
-          Container(
+          if (_loading)
+            const Center(child: CircularProgressIndicator())
+          else
+            Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -49,8 +77,11 @@ class ProfileTab extends StatelessWidget {
     );
   }
 
-
   Widget _profileHeader() {
+    final displayName = _profile?.fullName ?? 'Lecturer';
+    final displayId = _profile?.username ?? 'GV1234';
+    final displayRole = _profile?.role ?? 'Lecturer';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(32, 32, 32, 28),
@@ -72,12 +103,12 @@ class ProfileTab extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Lecturer Profile',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: _navy),
+              Text(
+                displayName,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: _navy),
               ),
               const SizedBox(height: 4),
-              Text('GV1234', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+              Text(displayId, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
@@ -85,9 +116,9 @@ class ProfileTab extends StatelessWidget {
                   color: _orange.withAlpha(25),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  'Lecturer',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _orange),
+                child: Text(
+                  displayRole,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _orange),
                 ),
               ),
             ],
@@ -115,6 +146,10 @@ class ProfileTab extends StatelessWidget {
   }
 
   Widget _infoSection() {
+    final fullName = _profile?.fullName ?? '—';
+    final username = _profile?.username ?? '—';
+    final role = _profile?.role ?? '—';
+
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -125,15 +160,15 @@ class ProfileTab extends StatelessWidget {
                 child: _infoRow(
                   icon: Icons.person_outline,
                   label: 'Full Name',
-                  value: 'Nguyen Van A',
+                  value: fullName,
                 ),
               ),
               const SizedBox(width: 24),
               Expanded(
                 child: _infoRow(
-                  icon: Icons.email_outlined,
-                  label: 'Email',
-                  value: 'anv@fpt.edu.vn',
+                  icon: Icons.badge_outlined,
+                  label: 'Username',
+                  value: username,
                 ),
               ),
             ],
@@ -143,17 +178,17 @@ class ProfileTab extends StatelessWidget {
             children: [
               Expanded(
                 child: _infoRow(
-                  icon: Icons.business_outlined,
-                  label: 'Campus',
-                  value: 'Ho Chi Minh City',
+                  icon: Icons.work_outline,
+                  label: 'Role',
+                  value: role,
                 ),
               ),
               const SizedBox(width: 24),
               Expanded(
                 child: _infoRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Department',
-                  value: 'Software Engineering',
+                  icon: Icons.business_outlined,
+                  label: 'Campus',
+                  value: 'Ho Chi Minh City',
                 ),
               ),
             ],
