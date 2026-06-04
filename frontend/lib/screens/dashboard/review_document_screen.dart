@@ -23,6 +23,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   bool _loadingDoc = true;
   ExamPaperInfo? _examPaper;
   bool _loadingExamPaper = true;
+  bool _submitting = false;
 
   static const _rubricItems = [
     _RubricItem('Request 1: Narrative Charter', 20),
@@ -54,6 +55,39 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   Future<void> _loadExamPaper() async {
     final info = await BatchService.getExamPaper(widget.review.batchId);
     if (mounted) setState(() { _examPaper = info; _loadingExamPaper = false; });
+  }
+
+  List<GradeItem> _buildGradeItems() {
+    return List.generate(_rubricItems.length, (i) => GradeItem(
+      requestNo: i + 1,
+      awardedScore: double.tryParse(_scores[i].text) ?? 0,
+      comments: _comments[i].text.trim(),
+    ));
+  }
+
+  Future<void> _submit({bool isDraft = false}) async {
+    setState(() => _submitting = true);
+    final ok = await SubmissionService.saveGrades(
+      widget.review.submissionId,
+      _buildGradeItems(),
+      isDraft: isDraft,
+    );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (ok) {
+      if (!isDraft) widget.onBack();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isDraft ? 'Draft saved' : 'Grades submitted successfully'),
+        backgroundColor: isDraft ? const Color(0xFF1B2D8B) : const Color(0xFF4CAF50),
+        duration: const Duration(seconds: 2),
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to save grades. Please try again.'),
+        backgroundColor: Color(0xFFE53935),
+        duration: Duration(seconds: 3),
+      ));
+    }
   }
 
   Future<void> _openExamPaper() async {
@@ -361,13 +395,16 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.arrow_forward, size: 16),
+                  onPressed: _submitting ? null : () => _submit(),
+                  icon: _submitting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.arrow_forward, size: 16),
                   iconAlignment: IconAlignment.end,
                   label: const Text('Submit & Next Student'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _orange,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: _orange.withAlpha(150),
                     elevation: 0,
                     minimumSize: const Size(double.infinity, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -376,7 +413,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: _submitting ? null : () => _submit(isDraft: true),
                   icon: const Icon(Icons.save_outlined, size: 16),
                   label: const Text('Save Draft'),
                   style: OutlinedButton.styleFrom(
