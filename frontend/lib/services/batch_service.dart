@@ -1,6 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+class ExamPaperInfo {
+  final String examCode;
+  final String examPaperUrl;
+  const ExamPaperInfo({required this.examCode, required this.examPaperUrl});
+  factory ExamPaperInfo.fromJson(Map<String, dynamic> json) => ExamPaperInfo(
+        examCode: json['examCode'] ?? '',
+        examPaperUrl: json['examPaperUrl'] ?? '',
+      );
+}
+
 class BatchSummary {
   final int batchId;
   final String campusCode;
@@ -93,6 +103,16 @@ class BatchService {
       }
     } catch (_) {}
     return [];
+  }
+
+  static Future<ExamPaperInfo?> getExamPaper(int batchId) async {
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/api/batches/$batchId/exam-paper'));
+      if (response.statusCode == 200) {
+        return ExamPaperInfo.fromJson(jsonDecode(response.body));
+      }
+    } catch (_) {}
+    return null;
   }
 
   static Future<List<BatchSummary>> getGradingHistory() async {

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dashboard_screen.dart';
+import '../../services/submission_service.dart';
+import '../../services/batch_service.dart';
 
 class ReviewDocumentScreen extends StatefulWidget {
   final ReviewInfo review;
@@ -16,6 +19,10 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   static const _orange = Color(0xFFF97316);
 
   int _activeTab = 0;
+  String? _documentText;
+  bool _loadingDoc = true;
+  ExamPaperInfo? _examPaper;
+  bool _loadingExamPaper = true;
 
   static const _rubricItems = [
     _RubricItem('Request 1: Narrative Charter', 20),
@@ -34,6 +41,27 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     _comments = List.generate(_rubricItems.length, (_) => TextEditingController());
     for (final c in _scores) {
       c.addListener(() => setState(() {}));
+    }
+    _loadDocument();
+    _loadExamPaper();
+  }
+
+  Future<void> _loadDocument() async {
+    final text = await SubmissionService.getDocument(widget.review.submissionId);
+    if (mounted) setState(() { _documentText = text; _loadingDoc = false; });
+  }
+
+  Future<void> _loadExamPaper() async {
+    final info = await BatchService.getExamPaper(widget.review.batchId);
+    if (mounted) setState(() { _examPaper = info; _loadingExamPaper = false; });
+  }
+
+  Future<void> _openExamPaper() async {
+    final url = _examPaper?.examPaperUrl;
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -187,35 +215,30 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Project Management - Practical Exam',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          const SizedBox(height: 8),
           Text('Student: ${widget.review.studentId} - ${widget.review.studentName}',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _navy)),
+          const SizedBox(height: 4),
           Text('Exam Code: ${widget.review.examCode}',
               style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
           const Divider(height: 32),
-          _docSection('Request 1: Narrative Charter (20%)',
-              'The project aims to develop a comprehensive learning management system for FPT University. '
-              'This system will streamline course registration, assignment submission, and grade tracking for students and faculty. '
-              'The initiative is driven by increasing enrollment numbers and the need for a more scalable digital infrastructure.'),
-          _docSection('Request 2: Budget Items (20%)', null,
-              bullets: [
-                'Server Infrastructure: \$15,000',
-                'Software Licenses: \$8,500',
-                'Development Team: \$45,000',
-                'Testing and QA: \$12,000',
-              ]),
-          _docSection('Request 3: Project Risks (30%)',
-              'Key risks include potential delays in third-party API integration, budget overruns due to scope changes, '
-              'and technical challenges with scalability. Mitigation strategies include weekly risk reviews, '
-              'buffer budgeting of 15%, and use of proven cloud infrastructure.'),
-          _docSection('Request 4: Project Schedule/WBS (30%)',
-              'Phase 1: Requirements gathering (2 weeks), Phase 2: Design and architecture (3 weeks), '
-              'Phase 3: Development (8 weeks), Phase 4: Testing and deployment (3 weeks). '
-              'Total project duration: 16 weeks with bi-weekly stakeholder reviews.'),
+          if (_loadingDoc)
+            const Center(child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: CircularProgressIndicator(),
+            ))
+          else if (_documentText == null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Text('Failed to load document',
+                    style: TextStyle(color: Colors.grey.shade500)),
+              ),
+            )
+          else
+            SelectableText(
+              _documentText!,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade800, height: 1.7),
+            ),
         ],
       ),
     );
@@ -229,59 +252,67 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'PMG301 - Project Management Practical Exam',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          const SizedBox(height: 8),
-          Text('Duration: 180 minutes  |  Total: 100 points',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-          const Divider(height: 32),
-          _docSection('Request 1: Narrative Charter (20 points)',
-              'Write a project narrative charter for a software development project at FPT University. '
-              'Include project objectives, stakeholders, scope, and success criteria.'),
-          _docSection('Request 2: Budget Items (20 points)',
-              'Prepare a detailed budget breakdown for the project. Include at least 4 major cost categories '
-              'with justification for each line item.'),
-          _docSection('Request 3: Project Risks (30 points)',
-              'Identify and analyze at least 5 key project risks. For each risk, provide probability, '
-              'impact assessment, and a mitigation strategy.'),
-          _docSection('Request 4: Project Schedule/WBS (30 points)',
-              'Create a Work Breakdown Structure and project schedule with phases, tasks, durations, '
-              'and dependencies. Use a Gantt chart or equivalent format.'),
-        ],
-      ),
-    );
-  }
-
-  Widget _docSection(String title, String? body, {List<String>? bullets}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _navy)),
-          const SizedBox(height: 8),
-          if (body != null)
-            Text(body, style: TextStyle(fontSize: 14, color: Colors.grey.shade700, height: 1.6)),
-          if (bullets != null)
-            ...bullets.map((b) => Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('• ', style: TextStyle(fontSize: 14)),
-                      Expanded(child: Text(b,
-                          style: TextStyle(fontSize: 14, color: Colors.grey.shade700))),
-                    ],
+      child: _loadingExamPaper
+          ? const Center(child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: CircularProgressIndicator(),
+            ))
+          : _examPaper == null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Text('Failed to load exam paper',
+                        style: TextStyle(color: Colors.grey.shade500)),
                   ),
-                )),
-        ],
-      ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _examPaper!.examCode,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Project Management Practical Exam',
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                    const Divider(height: 32),
+                    Center(
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF2FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.picture_as_pdf_outlined,
+                                size: 48, color: Color(0xFF4F6FD9)),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text('Exam paper is available as a PDF document',
+                              style: TextStyle(fontSize: 14, color: Colors.black54)),
+                          const SizedBox(height: 20),
+                          ElevatedButton.icon(
+                            onPressed: _openExamPaper,
+                            icon: const Icon(Icons.open_in_new, size: 16),
+                            label: const Text('Open Exam Paper'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _navy,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              textStyle: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
     );
   }
 

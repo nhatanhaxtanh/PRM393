@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dashboard_screen.dart';
 import '../../services/batch_service.dart';
 
@@ -29,6 +30,15 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   void initState() {
     super.initState();
     _loadSubmissions();
+  }
+
+  Future<void> _openExamPaper() async {
+    final info = await BatchService.getExamPaper(widget.batch.batchId);
+    if (info == null || info.examPaperUrl.isEmpty) return;
+    final uri = Uri.parse(info.examPaperUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> _loadSubmissions() async {
@@ -133,7 +143,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               OutlinedButton.icon(
-                onPressed: () {},
+                onPressed: _openExamPaper,
                 icon: const Icon(Icons.description_outlined, size: 16),
                 label: const Text('View Exam Paper'),
                 style: OutlinedButton.styleFrom(
@@ -268,6 +278,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               child: ElevatedButton(
                 onPressed: () => widget.onReviewSelected(ReviewInfo(
                   submissionId: s.submissionId,
+                  batchId: widget.batch.batchId,
                   studentId: s.studentId,
                   studentName: s.fullName,
                   examCode: widget.batch.examCode,
