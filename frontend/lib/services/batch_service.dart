@@ -94,4 +94,15 @@ class BatchService {
     } catch (_) {}
     return [];
   }
+
+  static Future<List<BatchSummary>> getGradingHistory() async {
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/api/batches/history'));
+      if (response.statusCode == 200) {
+        final List<dynamic> list = jsonDecode(response.body);
+        return list.map((e) => BatchSummary.fromJson(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
 }

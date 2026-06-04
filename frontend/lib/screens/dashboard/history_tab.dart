@@ -1,17 +1,35 @@
 import 'package:flutter/material.dart';
+import '../../services/batch_service.dart';
 
-class HistoryTab extends StatelessWidget {
+class HistoryTab extends StatefulWidget {
   const HistoryTab({super.key});
 
+  @override
+  State<HistoryTab> createState() => _HistoryTabState();
+}
+
+class _HistoryTabState extends State<HistoryTab> {
   static const _navy = Color(0xFF1B2D8B);
   static const _green = Color(0xFF4CAF50);
 
-  static const _records = [
-    _GradeRecord(studentId: 'SE123457', studentName: 'Tran Thi Binh', examCode: 'PE_201_Spring26', campus: 'HCM', score: 8.5, gradedDate: '2026-05-21 10:30'),
-    _GradeRecord(studentId: 'SE123458', studentName: 'Le Van Cuong', examCode: 'PE_201_Spring26', campus: 'HCM', score: 7.0, gradedDate: '2026-05-21 11:15'),
-    _GradeRecord(studentId: 'SE123461', studentName: 'Vo Thi Phuong', examCode: 'PE_201_Fall25', campus: 'HN', score: 9.0, gradedDate: '2026-05-21 14:20'),
-    _GradeRecord(studentId: 'SE123463', studentName: 'Bui Thi Ha', examCode: 'PE_201_Spring26', campus: 'HCM', score: 6.5, gradedDate: '2026-05-21 15:45'),
-  ];
+  List<BatchSummary> _batches = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final batches = await BatchService.getGradingHistory();
+    if (mounted) {
+      setState(() {
+        _batches = batches;
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +61,7 @@ class HistoryTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Completed Reviews',
+                  'Completed Batches',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy),
                 ),
                 const SizedBox(height: 4),
@@ -54,12 +72,27 @@ class HistoryTab extends StatelessWidget {
                 const SizedBox(height: 20),
 
                 _tableHeader(),
-                ...List.generate(_records.length, (i) => Column(
-                  children: [
-                    Divider(height: 1, color: Colors.grey.shade200),
-                    _recordRow(_records[i]),
-                  ],
-                )),
+
+                if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_batches.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Center(
+                      child: Text('No completed batches',
+                          style: TextStyle(color: Colors.grey.shade500)),
+                    ),
+                  )
+                else
+                  ...List.generate(_batches.length, (i) => Column(
+                    children: [
+                      Divider(height: 1, color: Colors.grey.shade200),
+                      _batchRow(_batches[i]),
+                    ],
+                  )),
               ],
             ),
           ),
@@ -73,72 +106,55 @@ class HistoryTab extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Expanded(child: _headerCell('STUDENT ID')),
-          Expanded(child: _headerCell('STUDENT NAME')),
-          Expanded(child: _headerCell('EXAM CODE')),
           Expanded(child: _headerCell('CAMPUS')),
-          Expanded(child: _headerCell('SCORE')),
-          Expanded(child: _headerCell('GRADED DATE')),
+          Expanded(child: _headerCell('EXAM CODE')),
+          Expanded(child: _headerCell('EXAM TYPE')),
+          Expanded(child: _headerCell('STUDENTS GRADED')),
+          Expanded(child: _headerCell('STATUS')),
         ],
       ),
     );
   }
 
-  Widget _headerCell(String text) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: Colors.grey.shade500,
-        letterSpacing: 0.5,
-      ),
-    );
-  }
+  Widget _headerCell(String text) => Text(
+        text,
+        style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Colors.grey.shade500,
+            letterSpacing: 0.5),
+      );
 
-  Widget _recordRow(_GradeRecord record) {
+  Widget _batchRow(BatchSummary batch) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              record.studentId,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: _navy,
-              ),
+            child: Text(batch.campusCode,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w500, color: _navy)),
+          ),
+          Expanded(
+            child: Text(batch.examCode,
+                style: const TextStyle(fontSize: 14, color: Colors.black87)),
+          ),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _examTypeBadge(batch.examType),
             ),
           ),
           Expanded(
             child: Text(
-              record.studentName,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              record.examCode,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              record.campus,
+              '${batch.gradedCount}/${batch.totalStudents}',
               style: const TextStyle(fontSize: 14, color: Colors.black87),
             ),
           ),
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
-              child: _scoreBadge(record.score),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              record.gradedDate,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              child: _completedBadge(),
             ),
           ),
         ],
@@ -146,10 +162,28 @@ class HistoryTab extends StatelessWidget {
     );
   }
 
-  Widget _scoreBadge(double score) {
-    final label = score == score.truncateToDouble() ? score.toInt().toString() : score.toString();
+  Widget _examTypeBadge(String type) {
+    final isFirst = type == 'FIRST_ATTEMPT';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isFirst ? const Color(0xFFEEF2FF) : const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        isFirst ? 'First Attempt' : 'Retake',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: isFirst ? const Color(0xFF4F6FD9) : const Color(0xFFF59E0B),
+        ),
+      ),
+    );
+  }
+
+  Widget _completedBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
         color: _green.withAlpha(25),
         borderRadius: BorderRadius.circular(20),
@@ -157,36 +191,15 @@ class HistoryTab extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_outline, size: 14, color: _green),
+          const Icon(Icons.check_circle_outline, size: 14, color: _green),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _green,
-            ),
+          const Text(
+            'Completed',
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: _green),
           ),
         ],
       ),
     );
   }
-}
-
-class _GradeRecord {
-  final String studentId;
-  final String studentName;
-  final String examCode;
-  final String campus;
-  final double score;
-  final String gradedDate;
-
-  const _GradeRecord({
-    required this.studentId,
-    required this.studentName,
-    required this.examCode,
-    required this.campus,
-    required this.score,
-    required this.gradedDate,
-  });
 }
