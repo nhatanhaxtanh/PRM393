@@ -1,4 +1,4 @@
-package com.backend.service.impl;
+package com.backend.service;
 
 import com.backend.service.FileProcessingService;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;

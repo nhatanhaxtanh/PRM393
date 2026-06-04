@@ -1,4 +1,4 @@
-package com.backend.service.impl;
+package com.backend.service;
 
 import com.backend.dto.GradeItemDTO;
 import com.backend.dto.GradeRequestDTO;
