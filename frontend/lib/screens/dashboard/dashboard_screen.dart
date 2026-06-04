@@ -7,6 +7,7 @@ import 'review_document_screen.dart';
 import '../profile/profile_screen.dart';
 
 class BatchInfo {
+  final int batchId;
   final String campus;
   final String examCode;
   final String examType;
@@ -14,6 +15,7 @@ class BatchInfo {
   final int total;
 
   const BatchInfo({
+    required this.batchId,
     required this.campus,
     required this.examCode,
     required this.examType,

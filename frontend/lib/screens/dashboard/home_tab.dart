@@ -1,12 +1,43 @@
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
+import '../../services/batch_service.dart';
 
-class HomeTab extends StatelessWidget {
+class HomeTab extends StatefulWidget {
   final ValueChanged<BatchInfo> onBatchSelected;
   const HomeTab({super.key, required this.onBatchSelected});
 
+  @override
+  State<HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<HomeTab> {
   static const _navy = Color(0xFF1B2D8B);
   static const _orange = Color(0xFFF97316);
+
+  List<BatchSummary> _batches = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBatches();
+  }
+
+  Future<void> _loadBatches() async {
+    final batches = await BatchService.getAssignedBatches();
+    if (mounted) {
+      setState(() {
+        _batches = batches;
+        _loading = false;
+      });
+    }
+  }
+
+  int get _totalStudents => _batches.fold(0, (s, b) => s + b.totalStudents);
+  int get _totalGraded => _batches.fold(0, (s, b) => s + b.gradedCount);
+  int get _pending => _totalStudents - _totalGraded;
+  String get _progressLabel =>
+      _totalStudents == 0 ? '0%' : '${(_totalGraded / _totalStudents * 100).round()}%';
 
   @override
   Widget build(BuildContext context) {
@@ -17,11 +48,7 @@ class HomeTab extends StatelessWidget {
         children: [
           const Text(
             'Welcome back, Lecturer',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: _navy,
-            ),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _navy),
           ),
           const SizedBox(height: 6),
           Text(
@@ -35,7 +62,7 @@ class HomeTab extends StatelessWidget {
               Expanded(
                 child: _StatCard(
                   label: 'Overall Progress',
-                  value: '41%',
+                  value: _loading ? '—' : _progressLabel,
                   valueColor: _navy,
                   icon: Icons.description_outlined,
                   iconBg: const Color(0xFFEEF2FF),
@@ -46,7 +73,7 @@ class HomeTab extends StatelessWidget {
               Expanded(
                 child: _StatCard(
                   label: 'Pending Reviews',
-                  value: '44',
+                  value: _loading ? '—' : '$_pending',
                   valueColor: _orange,
                   icon: Icons.access_time_outlined,
                   iconBg: const Color(0xFFFFF3E8),
@@ -57,7 +84,7 @@ class HomeTab extends StatelessWidget {
               Expanded(
                 child: _StatCard(
                   label: 'Completed Reviews',
-                  value: '31',
+                  value: _loading ? '—' : '$_totalGraded',
                   valueColor: _navy,
                   icon: Icons.check_circle_outline,
                   iconBg: const Color(0xFFE8F5E9),
@@ -68,106 +95,13 @@ class HomeTab extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          _BatchesTable(onBatchSelected: onBatchSelected),
+          _batchesTable(),
         ],
       ),
     );
   }
-}
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: valueColor,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 24),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BatchData {
-  final String campus;
-  final String examCode;
-  final String examType;
-  final int completed;
-  final int total;
-
-  const _BatchData({
-    required this.campus,
-    required this.examCode,
-    required this.examType,
-    required this.completed,
-    required this.total,
-  });
-}
-
-class _BatchesTable extends StatelessWidget {
-  final ValueChanged<BatchInfo> onBatchSelected;
-  const _BatchesTable({required this.onBatchSelected});
-
-  static const _navy = Color(0xFF1B2D8B);
-  static const _orange = Color(0xFFF97316);
-
-  static const _batches = [
-    _BatchData(campus: 'HCM', examCode: 'PE_201_Spring26', examType: 'First Attempt', completed: 15, total: 30),
-    _BatchData(campus: 'HN', examCode: 'PE_201_Spring26', examType: 'Retake', completed: 8, total: 12),
-    _BatchData(campus: 'DN', examCode: 'PE_201_Fall25', examType: 'First Attempt', completed: 0, total: 25),
-    _BatchData(campus: 'HCM', examCode: 'PE_201_Fall25', examType: 'Retake', completed: 8, total: 8),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _batchesTable() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -181,11 +115,7 @@ class _BatchesTable extends StatelessWidget {
         children: [
           const Text(
             'My Assigned PMG Batches',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: _navy,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy),
           ),
           const SizedBox(height: 4),
           Text(
@@ -196,14 +126,25 @@ class _BatchesTable extends StatelessWidget {
 
           _tableHeader(),
 
-          ...List.generate(_batches.length, (i) => Builder(
-            builder: (context) => Column(
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_batches.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('No batches assigned', style: TextStyle(color: Colors.grey.shade500)),
+              ),
+            )
+          else
+            ...List.generate(_batches.length, (i) => Column(
               children: [
                 Divider(height: 1, color: Colors.grey.shade200),
-                _batchRow(context, _batches[i]),
+                _batchRow(_batches[i]),
               ],
-            ),
-          )),
+            )),
         ],
       ),
     );
@@ -236,26 +177,19 @@ class _BatchesTable extends StatelessWidget {
     );
   }
 
-  Widget _batchRow(BuildContext context, _BatchData batch) {
+  Widget _batchRow(BatchSummary batch) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              batch.campus,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
+              batch.campusCode,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
             ),
           ),
           Expanded(
-            child: Text(
-              batch.examCode,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-            ),
+            child: Text(batch.examCode, style: const TextStyle(fontSize: 14, color: Colors.black87)),
           ),
           Expanded(
             child: Align(
@@ -263,18 +197,19 @@ class _BatchesTable extends StatelessWidget {
               child: _examTypeBadge(batch.examType),
             ),
           ),
-          Expanded(child: _progressBar(batch.completed, batch.total)),
+          Expanded(child: _progressBar(batch.gradedCount, batch.totalStudents)),
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: ElevatedButton.icon(
-                onPressed: () => onBatchSelected(BatchInfo(
-                campus: batch.campus,
-                examCode: batch.examCode,
-                examType: batch.examType,
-                completed: batch.completed,
-                total: batch.total,
-              )),
+                onPressed: () => widget.onBatchSelected(BatchInfo(
+                  batchId: batch.batchId,
+                  campus: batch.campusCode,
+                  examCode: batch.examCode,
+                  examType: batch.examType,
+                  completed: batch.gradedCount,
+                  total: batch.totalStudents,
+                )),
                 icon: const Icon(Icons.arrow_forward, size: 16),
                 iconAlignment: IconAlignment.end,
                 label: const Text('Grade Batch'),
@@ -283,9 +218,7 @@ class _BatchesTable extends StatelessWidget {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -297,7 +230,8 @@ class _BatchesTable extends StatelessWidget {
   }
 
   Widget _examTypeBadge(String type) {
-    final isFirst = type == 'First Attempt';
+    final isFirst = type == 'FIRST_ATTEMPT';
+    final label = isFirst ? 'First Attempt' : 'Retake';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -305,7 +239,7 @@ class _BatchesTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        type,
+        label,
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w500,
@@ -347,6 +281,57 @@ class _BatchesTable extends StatelessWidget {
           style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
         ),
       ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: valueColor),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: iconColor, size: 24),
+          ),
+        ],
+      ),
     );
   }
 }
