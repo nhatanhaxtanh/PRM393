@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'dashboard_screen.dart';
 import '../../services/submission_service.dart';
 import '../../services/batch_service.dart';
@@ -24,6 +24,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   ExamPaperInfo? _examPaper;
   bool _loadingExamPaper = true;
   bool _submitting = false;
+  String? _pdfError;
 
   static const _rubricItems = [
     _RubricItem('Request 1: Narrative Charter', 20),
@@ -87,15 +88,6 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
         backgroundColor: Color(0xFFE53935),
         duration: Duration(seconds: 3),
       ));
-    }
-  }
-
-  Future<void> _openExamPaper() async {
-    final url = _examPaper?.examPaperUrl;
-    if (url == null || url.isEmpty) return;
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -191,25 +183,29 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
               const SizedBox(width: 4),
               _tabButton('Exam Paper', 1),
               const Spacer(),
-              Icon(Icons.zoom_out, size: 18, color: Colors.grey.shade500),
-              const SizedBox(width: 8),
-              Text('100%', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-              const SizedBox(width: 8),
-              Icon(Icons.zoom_in, size: 18, color: Colors.grey.shade500),
-              const SizedBox(width: 20),
-              Text('Page 1 of 4', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+              if (_activeTab == 0) ...[
+                Icon(Icons.zoom_out, size: 18, color: Colors.grey.shade500),
+                const SizedBox(width: 8),
+                Text('100%', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                const SizedBox(width: 8),
+                Icon(Icons.zoom_in, size: 18, color: Colors.grey.shade500),
+                const SizedBox(width: 20),
+                Text('Page 1 of 4', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+              ],
             ],
           ),
         ),
         const Divider(height: 1),
         Expanded(
-          child: Container(
-            color: const Color(0xFFF5F6FA),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: _activeTab == 0 ? _studentSubmissionContent() : _examPaperContent(),
-            ),
-          ),
+          child: _activeTab == 0
+              ? Container(
+                  color: const Color(0xFFF5F6FA),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: _studentSubmissionContent(),
+                  ),
+                )
+              : _examPaperContent(),
         ),
       ],
     );
@@ -279,74 +275,26 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   }
 
   Widget _examPaperContent() {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: _loadingExamPaper
-          ? const Center(child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: CircularProgressIndicator(),
-            ))
-          : _examPaper == null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    child: Text('Failed to load exam paper',
-                        style: TextStyle(color: Colors.grey.shade500)),
-                  ),
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _examPaper!.examCode,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('Project Management Practical Exam',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-                    const Divider(height: 32),
-                    Center(
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEEF2FF),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.picture_as_pdf_outlined,
-                                size: 48, color: Color(0xFF4F6FD9)),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text('Exam paper is available as a PDF document',
-                              style: TextStyle(fontSize: 14, color: Colors.black54)),
-                          const SizedBox(height: 20),
-                          ElevatedButton.icon(
-                            onPressed: _openExamPaper,
-                            icon: const Icon(Icons.open_in_new, size: 16),
-                            label: const Text('Open Exam Paper'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _navy,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              textStyle: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+    if (_loadingExamPaper) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_examPaper == null || _examPaper!.examPaperUrl.isEmpty) {
+      return Center(
+        child: Text('Failed to load exam paper',
+            style: TextStyle(color: Colors.grey.shade500)),
+      );
+    }
+    if (_pdfError != null) {
+      return Center(
+        child: Text('PDF error: $_pdfError',
+            style: TextStyle(color: Colors.red.shade400)),
+      );
+    }
+    return SfPdfViewer.network(
+      _examPaper!.examPaperUrl,
+      onDocumentLoadFailed: (PdfDocumentLoadFailedDetails details) {
+        setState(() => _pdfError = details.description);
+      },
     );
   }
 
