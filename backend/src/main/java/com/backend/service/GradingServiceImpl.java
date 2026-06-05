@@ -2,14 +2,16 @@ package com.backend.service;
 
 import com.backend.dto.GradeItemDTO;
 import com.backend.dto.GradeRequestDTO;
+import com.backend.entity.Batch;
 import com.backend.entity.Grade;
 import com.backend.entity.Rubric;
 import com.backend.entity.Submission;
+import com.backend.enums.BatchStatus;
 import com.backend.enums.SubmissionStatus;
+import com.backend.repository.BatchRepository;
 import com.backend.repository.GradeRepository;
 import com.backend.repository.RubricRepository;
 import com.backend.repository.SubmissionRepository;
-import com.backend.service.GradingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,7 @@ public class GradingServiceImpl implements GradingService {
     private final SubmissionRepository submissionRepository;
     private final GradeRepository gradeRepository;
     private final RubricRepository rubricRepository;
+    private final BatchRepository batchRepository;
 
     @Override
     @Transactional // Đảm bảo nếu lỗi thì rollback toàn bộ, không lưu nửa vời
@@ -76,5 +79,14 @@ public class GradingServiceImpl implements GradingService {
         }
 
         submissionRepository.save(submission);
+
+        // 5. Nếu toàn bộ submissions trong batch đều GRADED, đánh dấu batch là COMPLETED
+        Batch batch = submission.getBatch();
+        long total = submissionRepository.findByBatchId(batch.getId()).size();
+        long graded = submissionRepository.countGradedByBatchId(batch.getId());
+        if (total > 0 && graded == total) {
+            batch.setStatus(BatchStatus.COMPLETED);
+            batchRepository.save(batch);
+        }
     }
 }
