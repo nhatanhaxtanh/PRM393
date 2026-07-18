@@ -31,6 +31,10 @@ public class GradingServiceImpl implements GradingService {
     @Override
     @Transactional // Đảm bảo nếu lỗi thì rollback toàn bộ, không lưu nửa vời
     public void saveGrades(Long submissionId, GradeRequestDTO request) {
+        if (request.getGrades() == null || request.getGrades().isEmpty()) {
+            throw new IllegalArgumentException("Danh sach diem khong duoc de trong.");
+        }
+
         // 1. Tìm bài nộp
         Submission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bài nộp với ID: " + submissionId));
@@ -45,6 +49,10 @@ public class GradingServiceImpl implements GradingService {
         List<Grade> gradesToSave = new ArrayList<>();
 
         for (GradeItemDTO item : request.getGrades()) {
+            if (item.getRequestNo() == null || item.getAwardedScore() == null) {
+                throw new IllegalArgumentException("Request number va diem khong duoc de trong.");
+            }
+
             // Tìm Barem (Rubric) tương ứng với câu hỏi này trong đề thi
             Rubric rubric = rubricRepository.findByExamIdAndRequestNo(examId, item.getRequestNo())
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy Barem cho Request No: " + item.getRequestNo()));

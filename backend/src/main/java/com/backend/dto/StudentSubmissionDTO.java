@@ -13,4 +13,5 @@ public class StudentSubmissionDTO {
     private LocalDateTime submissionTime;
     private String status;        // NOT_GRADED, DRAFT, GRADED
     private Double totalScore;    // Null nếu chưa chấm
+    private Boolean isAIGraded;   // True nếu chấm bởi AI
 }

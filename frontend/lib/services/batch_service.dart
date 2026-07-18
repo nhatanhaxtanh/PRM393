@@ -45,6 +45,7 @@ class StudentSubmission {
   final String submissionTime;
   final String status;
   final double? totalScore;
+  final bool isAIGraded;
 
   const StudentSubmission({
     required this.submissionId,
@@ -53,6 +54,7 @@ class StudentSubmission {
     required this.submissionTime,
     required this.status,
     required this.totalScore,
+    this.isAIGraded = false,
   });
 
   bool get isGraded => status == 'GRADED';
@@ -76,6 +78,7 @@ class StudentSubmission {
       submissionTime: time,
       status: json['status'] ?? 'NOT_GRADED',
       totalScore: (json['totalScore'] as num?)?.toDouble(),
+      isAIGraded: json['isAIGraded'] as bool? ?? false,
     );
   }
 }
@@ -124,5 +127,18 @@ class BatchService {
       }
     } catch (_) {}
     return [];
+  }
+
+  static Future<Map<String, dynamic>?> autoGradeAll(int batchId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/batches/$batchId/auto-grade-all'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {}
+    return null;
   }
 }

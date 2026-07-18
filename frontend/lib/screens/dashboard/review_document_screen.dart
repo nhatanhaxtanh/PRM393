@@ -24,6 +24,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   ExamPaperInfo? _examPaper;
   bool _loadingExamPaper = true;
   bool _submitting = false;
+  bool _autoGrading = false;
   String? _pdfError;
 
   static const _rubricItems = [
@@ -58,6 +59,31 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     if (mounted) setState(() { _examPaper = info; _loadingExamPaper = false; });
   }
 
+  Future<void> _autoGrade() async {
+    setState(() => _autoGrading = true);
+    final aiGrades = await SubmissionService.autoGrade(widget.review.submissionId);
+    if (!mounted) return;
+    setState(() => _autoGrading = false);
+    
+    if (aiGrades != null && aiGrades.length == _scores.length) {
+      for (int i = 0; i < aiGrades.length; i++) {
+        _scores[i].text = aiGrades[i].awardedScore.toStringAsFixed(1);
+        _comments[i].text = aiGrades[i].comments;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('AI grading completed successfully'),
+        backgroundColor: Color(0xFF4CAF50),
+        duration: Duration(seconds: 2),
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to get AI grading. Please try again.'),
+        backgroundColor: Color(0xFFE53935),
+        duration: Duration(seconds: 3),
+      ));
+    }
+  }
+
   List<GradeItem> _buildGradeItems() {
     return List.generate(_rubricItems.length, (i) => GradeItem(
       requestNo: i + 1,
@@ -67,6 +93,16 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   }
 
   Future<void> _submit({bool isDraft = false}) async {
+    final validationError = _validateScores();
+    if (validationError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(validationError),
+        backgroundColor: const Color(0xFFE53935),
+        duration: const Duration(seconds: 3),
+      ));
+      return;
+    }
+
     setState(() => _submitting = true);
     final ok = await SubmissionService.saveGrades(
       widget.review.submissionId,
@@ -91,6 +127,19 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     }
   }
 
+  String? _validateScores() {
+    for (int i = 0; i < _rubricItems.length; i++) {
+      final score = double.tryParse(_scores[i].text);
+      if (score == null) {
+        return 'Request ${i + 1}: score must be a valid number';
+      }
+      if (score < 0 || score > _rubricItems[i].maxScore) {
+        return 'Request ${i + 1}: score must be between 0 and ${_rubricItems[i].maxScore}';
+      }
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     for (final c in [..._scores, ..._comments]) {
@@ -99,7 +148,14 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     super.dispose();
   }
 
-  int get _totalScore => _scores.fold(0, (sum, c) => sum + (int.tryParse(c.text) ?? 0));
+  double get _totalScore => _scores.fold(0.0, (sum, c) => sum + (double.tryParse(c.text) ?? 0.0));
+
+  String get _totalScoreLabel {
+    final rounded = (_totalScore * 10).round() / 10;
+    return rounded == rounded.truncateToDouble()
+        ? rounded.toInt().toString()
+        : rounded.toStringAsFixed(1);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -335,13 +391,31 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                     children: [
                       const Text('Total Score:',
                           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                      Text('$_totalScore / 100',
+                      Text('$_totalScoreLabel / 100',
                           style: const TextStyle(
                               fontSize: 20, fontWeight: FontWeight.w800, color: _navy)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _autoGrading ? null : _autoGrade,
+                  icon: _autoGrading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome, size: 16),
+                  iconAlignment: IconAlignment.start,
+                  label: Text(_autoGrading ? 'AI Grading...' : 'Auto-grade with AI'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _navy,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: _navy.withAlpha(150),
+                    elevation: 0,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 ElevatedButton.icon(
                   onPressed: _submitting ? null : () => _submit(),
                   icon: _submitting

@@ -37,4 +37,8 @@ public class Submission {
 
     @Column(name = "total_score")
     private Double totalScore;
+
+    @Builder.Default
+    @Column(name = "is_ai_graded")
+    private Boolean isAIGraded = false;
 }

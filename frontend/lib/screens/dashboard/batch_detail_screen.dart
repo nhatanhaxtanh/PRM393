@@ -25,6 +25,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
 
   List<StudentSubmission> _submissions = [];
   bool _loading = true;
+  bool _autoGradingAll = false;
 
   @override
   void initState() {
@@ -48,6 +49,29 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         _submissions = submissions;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _autoGradeAll() async {
+    setState(() => _autoGradingAll = true);
+    final result = await BatchService.autoGradeAll(widget.batch.batchId);
+    if (!mounted) return;
+    setState(() => _autoGradingAll = false);
+
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('AI grading completed: ${result['gradedCount']}/${result['totalSubmissions']} submissions graded'),
+        backgroundColor: Color(0xFF4CAF50),
+        duration: Duration(seconds: 3),
+      ));
+      // Reload submissions to show updated status
+      _loadSubmissions();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to auto-grade all submissions. Please try again.'),
+        backgroundColor: Color(0xFFE53935),
+        duration: Duration(seconds: 3),
+      ));
     }
   }
 
@@ -201,6 +225,24 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
           const SizedBox(height: 4),
           Text('All documents have been automatically fetched from the secure server',
               style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _autoGradingAll ? null : _autoGradeAll,
+            icon: _autoGradingAll
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.auto_awesome, size: 16),
+            iconAlignment: IconAlignment.start,
+            label: Text(_autoGradingAll ? 'AI Grading All...' : 'Auto-grade All with AI'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _navy,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: _navy.withAlpha(150),
+              elevation: 0,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
           const SizedBox(height: 20),
           _tableHeader(),
           if (_loading)
@@ -269,7 +311,32 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
             flex: 2,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: s.isGraded ? _gradedBadge(s.totalScore!) : _notGradedBadge(),
+              child: Row(
+                children: [
+                  if (s.isGraded) _gradedBadge(s.totalScore!) else _notGradedBadge(),
+                  if (s.isAIGraded) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3F2FD),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF2196F3), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.auto_awesome, size: 12, color: Color(0xFF2196F3)),
+                          const SizedBox(width: 4),
+                          const Text('AI',
+                              style: TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF2196F3))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
           Expanded(
