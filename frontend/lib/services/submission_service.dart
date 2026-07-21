@@ -1,12 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+// Chỉ giữ lại các class liên quan đến Grade/Submission
 class GradeItem {
   final int requestNo;
   final double awardedScore;
   final String comments;
+
   const GradeItem({required this.requestNo, required this.awardedScore, required this.comments});
+
   Map<String, dynamic> toJson() => {'requestNo': requestNo, 'awardedScore': awardedScore, 'comments': comments};
+
   factory GradeItem.fromJson(Map<String, dynamic> json) => GradeItem(
     requestNo: json['requestNo'] as int,
     awardedScore: (json['awardedScore'] as num).toDouble(),
@@ -23,7 +27,15 @@ class SubmissionService {
         Uri.parse('$_baseUrl/api/submissions/$submissionId/document'),
       );
       if (response.statusCode == 200) {
-        return response.body.replaceAll('<br>', '\n').replaceAll(RegExp(r'<[^>]+>'), '');
+        final body = jsonDecode(response.body);
+        
+        if (body['status'] == 200) {
+          String text = (body['data'] ?? body['message'] ?? '').toString();
+          
+          if (text.isNotEmpty) {
+            return text.replaceAll('<br>', '\n').replaceAll(RegExp(r'<[^>]+>'), '');
+          }
+        }
       }
     } catch (_) {}
     return null;
@@ -40,9 +52,7 @@ class SubmissionService {
         }),
       );
       return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+    } catch (_) { return false; }
   }
 
   static Future<List<GradeItem>?> autoGrade(int submissionId) async {
@@ -52,8 +62,11 @@ class SubmissionService {
         headers: {'Content-Type': 'application/json'},
       );
       if (response.statusCode == 200) {
-        final List<dynamic> list = jsonDecode(response.body);
-        return list.map((e) => GradeItem.fromJson(e)).toList();
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          final List<dynamic> list = body['data'];
+          return list.map((e) => GradeItem.fromJson(e)).toList();
+        }
       }
     } catch (_) {}
     return null;

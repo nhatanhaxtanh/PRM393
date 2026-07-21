@@ -35,24 +35,43 @@ public class DataInitializer implements CommandLineRunner {
 
             Random random = new Random();
 
-            // 1. Tạo Giảng viên
-            User grader = userRepository.save(User.builder()
-                    .username("GV1234")
+            // 1. Tạo Campus
+            Campus campusHCM = campusRepository.save(Campus.builder().campusCode("HCM").campusName("FPTU Hồ Chí Minh").build());
+            Campus campusHN = campusRepository.save(Campus.builder().campusCode("HN").campusName("FPTU Hà Nội").build());
+
+            // 2. Tạo Users (Admin & Graders)
+            User admin = userRepository.save(User.builder()
+                    .username("AD0001")
+                    .email("admin@fpt.edu.vn")
                     .passwordHash("123456")
-                    .fullName("Nguyễn Văn Giảng Viên")
-                    .role("GRADER")
+                    .fullName("Trần Quản Trị")
+                    .role("ADMIN")
                     .build());
 
-            // 2. Tạo Cơ sở
-            Campus campusHCM = campusRepository.save(Campus.builder().campusCode("HCM").campusName("FPTU Hồ Chí Minh").build());
-            campusRepository.save(Campus.builder().campusCode("HN").campusName("FPTU Hà Nội").build());
+            User grader = userRepository.save(User.builder()
+                    .username("GV1234")
+                    .email("gv1234@fpt.edu.vn")
+                    .passwordHash("123456")
+                    .fullName("Nguyễn Giảng Viên")
+                    .role("GRADER")
+                    .campus(campusHCM)
+                    .build());
+
+            User grader2 = userRepository.save(User.builder()
+                    .username("GV1235")
+                    .email("gv1235@fpt.edu.vn")
+                    .passwordHash("123456")
+                    .fullName("Lê Tuấn Anh")
+                    .role("GRADER")
+                    .campus(campusHN)
+                    .build());
 
             // 3. Tạo Đề thi PMG
             Exam examPE201 = examRepository.save(Exam.builder()
                     .examCode("PE_201_Spring26")
                     .term("Spring2026")
                     .examType("FIRST_ATTEMPT")
-                    .examPaperUrl("http://localhost:8080/mock-exam.pdf")
+                    .examPaperUrl("https://prm-assignment.s3.ap-southeast-1.amazonaws.com/mock-exam.pdf")
                     .build());
 
             // 4. Tạo 4 Rubrics (20 - 20 - 30 - 30)
@@ -150,8 +169,77 @@ public class DataInitializer implements CommandLineRunner {
                 }
             }
 
+            // 7. Tạo thêm 1 Lô bài hoàn thành (Batch) 10 bài để test Grading History
+            Exam examPE202 = examRepository.save(Exam.builder()
+                    .examCode("PE_202_Spring26")
+                    .term("Spring2026")
+                    .examType("FIRST_ATTEMPT")
+                    .examPaperUrl("https://prm-assignment.s3.ap-southeast-1.amazonaws.com/mock-exam.pdf")
+                    .build());
+
+            List<Rubric> rubricsPE202 = rubricRepository.saveAll(List.of(
+                    Rubric.builder().exam(examPE202).requestNo(1).title("Narrative Charter Statement").maxScore(20.0).build(),
+                    Rubric.builder().exam(examPE202).requestNo(2).title("Budget Items").maxScore(20.0).build(),
+                    Rubric.builder().exam(examPE202).requestNo(3).title("Project Risks").maxScore(30.0).build(),
+                    Rubric.builder().exam(examPE202).requestNo(4).title("Project Schedule/WBS").maxScore(30.0).build()
+            ));
+
+            Batch batchHistoryTest = batchRepository.save(Batch.builder()
+                    .exam(examPE202)
+                    .campus(campusHCM)
+                    .grader(grader)
+                    .status(BatchStatus.COMPLETED)
+                    .build());
+
+            for (int i = 1; i <= 10; i++) {
+                String ho = hoList[random.nextInt(hoList.length)];
+                String dem = demList[random.nextInt(demList.length)];
+                String ten = tenList[random.nextInt(tenList.length)];
+                String fullName = ho + " " + dem + " " + ten;
+                String studentId = "SE" + (150000 + i);
+
+                Student student = studentRepository.save(Student.builder()
+                        .studentId(studentId)
+                        .fullName(fullName)
+                        .build());
+
+                LocalDateTime subTime = LocalDateTime.now().minusDays(5).minusHours(i);
+
+                Submission submission = Submission.builder()
+                        .batch(batchHistoryTest)
+                        .student(student)
+                        .file_url(dummyFilePath)
+                        .submissionTime(subTime)
+                        .status(SubmissionStatus.GRADED)
+                        .build();
+
+                submission = submissionRepository.save(submission);
+
+                double calculatedTotal = 0.0;
+                List<Grade> grades = new ArrayList<>();
+
+                for (Rubric rubric : rubricsPE202) {
+                    double minScore = rubric.getMaxScore() * 0.7;
+                    double awarded = minScore + (random.nextDouble() * (rubric.getMaxScore() - minScore));
+                    awarded = Math.round(awarded * 10.0) / 10.0;
+
+                    calculatedTotal += awarded;
+
+                    grades.add(Grade.builder()
+                            .submission(submission)
+                            .rubric(rubric)
+                            .awardedScore(awarded)
+                            .comments("Đã hoàn thành chấm bài.")
+                            .build());
+                }
+                gradeRepository.saveAll(grades);
+
+                submission.setTotalScore(Math.round(calculatedTotal * 10.0) / 10.0);
+                submissionRepository.save(submission);
+            }
+
             System.out.println("--- KHỞI TẠO DỮ LIỆU THÀNH CÔNG ---");
-            System.out.println("Đã tạo 1 lô bài gồm 40 sinh viên với các trạng thái chấm ngẫu nhiên.");
+            System.out.println("Đã tạo 1 lô bài gồm 40 sinh viên với các trạng thái chấm ngẫu nhiên và 1 lô lịch sử 10 bài hoàn thành.");
         }
     }
 }

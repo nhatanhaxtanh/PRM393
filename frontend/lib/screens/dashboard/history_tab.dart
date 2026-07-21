@@ -48,7 +48,6 @@ class _HistoryTabState extends State<HistoryTab> {
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 28),
-
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -70,29 +69,40 @@ class _HistoryTabState extends State<HistoryTab> {
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                 ),
                 const SizedBox(height: 20),
-
-                _tableHeader(),
-
-                if (_loading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_batches.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32),
-                    child: Center(
-                      child: Text('No completed batches',
-                          style: TextStyle(color: Colors.grey.shade500)),
+                
+                // Bọc trong SingleChildScrollView để chống tràn phải (overflow) trên mobile
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 550),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _tableHeader(),
+                        if (_loading)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (_batches.isEmpty)
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: Text('No completed batches',
+                                  style: TextStyle(color: Colors.grey.shade500)),
+                            ),
+                          )
+                        else
+                          ...List.generate(_batches.length, (i) => Column(
+                            children: [
+                              Divider(height: 1, color: Colors.grey.shade200),
+                              _batchRow(_batches[i]),
+                            ],
+                          )),
+                      ],
                     ),
-                  )
-                else
-                  ...List.generate(_batches.length, (i) => Column(
-                    children: [
-                      Divider(height: 1, color: Colors.grey.shade200),
-                      _batchRow(_batches[i]),
-                    ],
-                  )),
+                  ),
+                ),
               ],
             ),
           ),
@@ -183,7 +193,7 @@ class _HistoryTabState extends State<HistoryTab> {
 
   Widget _completedBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: _green.withAlpha(25),
         borderRadius: BorderRadius.circular(20),
@@ -196,7 +206,7 @@ class _HistoryTabState extends State<HistoryTab> {
           const Text(
             'Completed',
             style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w600, color: _green),
+                fontSize: 12, fontWeight: FontWeight.w600, color: _green),
           ),
         ],
       ),

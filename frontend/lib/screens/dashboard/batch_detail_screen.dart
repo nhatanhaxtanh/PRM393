@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart'; // Bổ sung thư viện
 import 'dashboard_screen.dart';
 import '../../services/batch_service.dart';
 
@@ -27,10 +29,43 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   bool _loading = true;
   bool _autoGradingAll = false;
 
+  // Search & Filter State
+  String _keyword = '';
+  String _status = 'ALL';
+  
+  // Remote Config State
+  bool _isAIGradingEnabled = true; // Mặc định là bật
+
   @override
   void initState() {
     super.initState();
+    _initRemoteConfig(); // Gọi hàm cấu hình Firebase
     _loadSubmissions();
+  }
+
+  // Khởi tạo và fetch dữ liệu từ Firebase Remote Config
+  Future<void> _initRemoteConfig() async {
+    final remoteConfig = FirebaseRemoteConfig.instance;
+    await remoteConfig.setConfigSettings(RemoteConfigSettings(
+      fetchTimeout: const Duration(minutes: 1),
+      minimumFetchInterval: const Duration(seconds: 0), // Lấy data ngay lập tức để test
+    ));
+
+    // Đặt giá trị dự phòng nếu không có mạng
+    await remoteConfig.setDefaults(const {
+      "enable_ai_grading": true,
+    });
+
+    try {
+      await remoteConfig.fetchAndActivate();
+      if (mounted) {
+        setState(() {
+          _isAIGradingEnabled = remoteConfig.getBool('enable_ai_grading');
+        });
+      }
+    } catch (e) {
+      debugPrint('Lỗi tải Remote Config: $e');
+    }
   }
 
   Future<void> _openExamPaper() async {
@@ -43,13 +78,29 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   }
 
   Future<void> _loadSubmissions() async {
-    final submissions = await BatchService.getSubmissionsByBatch(widget.batch.batchId);
+    setState(() => _loading = true);
+    final submissions = await BatchService.getSubmissionsByBatch(
+      widget.batch.batchId,
+      keyword: _keyword,
+      status: _status,
+    );
     if (mounted) {
       setState(() {
         _submissions = submissions;
         _loading = false;
       });
     }
+  }
+
+  void _onSearch(String value) {
+    setState(() => _keyword = value.trim());
+    if (_keyword.isNotEmpty) {
+      FirebaseAnalytics.instance.logEvent(
+        name: 'search_student',
+        parameters: {'keyword': _keyword},
+      );
+    }
+    _loadSubmissions();
   }
 
   Future<void> _autoGradeAll() async {
@@ -61,10 +112,9 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     if (result != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('AI grading completed: ${result['gradedCount']}/${result['totalSubmissions']} submissions graded'),
-        backgroundColor: Color(0xFF4CAF50),
-        duration: Duration(seconds: 3),
+        backgroundColor: const Color(0xFF4CAF50),
+        duration: const Duration(seconds: 3),
       ));
-      // Reload submissions to show updated status
       _loadSubmissions();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -117,55 +167,26 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('PMG Batch Details',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: _navy)),
-                const SizedBox(height: 4),
-                Text('Project Management Practical Exam',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 24,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _metaItem('Campus:', widget.batch.campus, isLink: true),
-                    _metaItem('Exam Code:', widget.batch.examCode),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Type: ', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: isFirst ? const Color(0xFFEEF2FF) : const Color(0xFFFFF8E1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            typeLabel,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: isFirst ? const Color(0xFF4F6FD9) : const Color(0xFFF59E0B),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    _metaItem('Total Students:', widget.batch.total.toString()),
+                    const Text('PMG Batch Details',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: _navy)),
+                    const SizedBox(height: 4),
+                    Text('Project Management Practical Exam',
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                   ],
                 ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
+              ),
+              const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: _openExamPaper,
                 icon: const Icon(Icons.description_outlined, size: 16),
@@ -178,12 +199,47 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                   textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                 ),
               ),
-              const SizedBox(height: 12),
-              Text('Grading Progress', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-              const SizedBox(height: 2),
-              Text(
-                '${widget.batch.completed}/${widget.batch.total}',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _orange),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 24,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _metaItem('Campus:', widget.batch.campus, isLink: true),
+              _metaItem('Exam Code:', widget.batch.examCode),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Type: ', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isFirst ? const Color(0xFFEEF2FF) : const Color(0xFFFFF8E1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      typeLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isFirst ? const Color(0xFF4F6FD9) : const Color(0xFFF59E0B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              _metaItem('Total Students:', widget.batch.total.toString()),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Progress: ', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                  Text(
+                    '${widget.batch.completed}/${widget.batch.total}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _orange),
+                  ),
+                ],
               ),
             ],
           ),
@@ -220,29 +276,41 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Student Submissions',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy)),
-          const SizedBox(height: 4),
-          Text('All documents have been automatically fetched from the secure server',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _autoGradingAll ? null : _autoGradeAll,
-            icon: _autoGradingAll
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.auto_awesome, size: 16),
-            iconAlignment: IconAlignment.start,
-            label: Text(_autoGradingAll ? 'AI Grading All...' : 'Auto-grade All with AI'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _navy,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: _navy.withAlpha(150),
-              elevation: 0,
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Student Submissions',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy)),
+                  const SizedBox(height: 4),
+                  Text('All documents have been automatically fetched from the secure server',
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                ],
+              ),
+              // Nút AI chỉ hiển thị nếu _isAIGradingEnabled = true trên Remote Config
+              if (_isAIGradingEnabled)
+                ElevatedButton.icon(
+                  onPressed: _autoGradingAll ? null : _autoGradeAll,
+                  icon: _autoGradingAll
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome, size: 16),
+                  label: Text(_autoGradingAll ? 'AI Grading All...' : 'Auto-grade All with AI'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _navy,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: _navy.withAlpha(150),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+            ],
           ),
+          const SizedBox(height: 20),
+          _searchAndFilterBar(),
           const SizedBox(height: 20),
           _tableHeader(),
           if (_loading)
@@ -267,6 +335,59 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
             )),
         ],
       ),
+    );
+  }
+
+  Widget _searchAndFilterBar() {
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Search by Student ID or Name...',
+              prefixIcon: const Icon(Icons.search, size: 20, color: _navy),
+              filled: true,
+              fillColor: const Color(0xFFF5F6FA),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none),
+            ),
+            onSubmitted: _onSearch,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F6FA),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _status,
+                isExpanded: true,
+                icon: const Icon(Icons.filter_list, size: 20, color: _navy),
+                style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500),
+                items: const [
+                  DropdownMenuItem(value: 'ALL', child: Text('All Status')),
+                  DropdownMenuItem(value: 'GRADED', child: Text('Graded')),
+                  DropdownMenuItem(value: 'NOT_GRADED', child: Text('Not Graded')),
+                  DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _status = val);
+                    _loadSubmissions();
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -301,7 +422,8 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
           ),
           Expanded(
             child: Text(s.fullName,
-                style: const TextStyle(fontSize: 14, color: Colors.black87)),
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                overflow: TextOverflow.ellipsis),
           ),
           Expanded(
             child: Text(s.submissionTime,
@@ -311,11 +433,18 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
             flex: 2,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Row(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  if (s.isGraded) _gradedBadge(s.totalScore!) else _notGradedBadge(),
-                  if (s.isAIGraded) ...[
-                    const SizedBox(width: 8),
+                  if (s.status == 'GRADED')
+                    _gradedBadge(s.totalScore!)
+                  else if (s.status == 'DRAFT')
+                    _draftBadge()
+                  else
+                    _notGradedBadge(),
+                  if (s.isAIGraded)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -334,7 +463,6 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                         ],
                       ),
                     ),
-                  ],
                 ],
               ),
             ),
@@ -375,6 +503,15 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         child: const Text('Not Graded',
             style: TextStyle(
                 fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFE53935))),
+      );
+
+  Widget _draftBadge() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+            color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(20)),
+        child: const Text('Draft',
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFF57C00))),
       );
 
   Widget _gradedBadge(double score) {

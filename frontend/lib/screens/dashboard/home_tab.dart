@@ -41,6 +41,8 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 850;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
       child: Column(
@@ -56,52 +58,84 @@ class _HomeTabState extends State<HomeTab> {
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 28),
-
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
+          
+          if (isMobile)
+            Column(
+              children: [
+                _StatCard(
                   label: 'Overall Progress',
-                  value: _loading ? '—' : _progressLabel,
+                  value: _loading ? '...' : _progressLabel,
                   valueColor: _navy,
                   icon: Icons.description_outlined,
                   iconBg: const Color(0xFFEEF2FF),
                   iconColor: const Color(0xFF4F6FD9),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _StatCard(
+                const SizedBox(height: 16),
+                _StatCard(
                   label: 'Pending Reviews',
-                  value: _loading ? '—' : '$_pending',
+                  value: _loading ? '...' : '$_pending',
                   valueColor: _orange,
                   icon: Icons.access_time_outlined,
                   iconBg: const Color(0xFFFFF3E8),
                   iconColor: _orange,
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _StatCard(
+                const SizedBox(height: 16),
+                _StatCard(
                   label: 'Completed Reviews',
-                  value: _loading ? '—' : '$_totalGraded',
+                  value: _loading ? '...' : '$_totalGraded',
                   valueColor: _navy,
                   icon: Icons.check_circle_outline,
                   iconBg: const Color(0xFFE8F5E9),
                   iconColor: const Color(0xFF4CAF50),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'Overall Progress',
+                    value: _loading ? '...' : _progressLabel,
+                    valueColor: _navy,
+                    icon: Icons.description_outlined,
+                    iconBg: const Color(0xFFEEF2FF),
+                    iconColor: const Color(0xFF4F6FD9),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Pending Reviews',
+                    value: _loading ? '...' : '$_pending',
+                    valueColor: _orange,
+                    icon: Icons.access_time_outlined,
+                    iconBg: const Color(0xFFFFF3E8),
+                    iconColor: _orange,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Completed Reviews',
+                    value: _loading ? '...' : '$_totalGraded',
+                    valueColor: _navy,
+                    icon: Icons.check_circle_outline,
+                    iconBg: const Color(0xFFE8F5E9),
+                    iconColor: const Color(0xFF4CAF50),
+                  ),
+                ),
+              ],
+            ),
 
-          _batchesTable(),
+          const SizedBox(height: 24),
+          _batchesTable(isMobile),
         ],
       ),
     );
   }
 
-  Widget _batchesTable() {
+  Widget _batchesTable(bool isMobile) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -123,9 +157,7 @@ class _HomeTabState extends State<HomeTab> {
             style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
           ),
           const SizedBox(height: 20),
-
-          _tableHeader(),
-
+          _tableHeader(isMobile),
           if (_loading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 32),
@@ -142,7 +174,7 @@ class _HomeTabState extends State<HomeTab> {
             ...List.generate(_batches.length, (i) => Column(
               children: [
                 Divider(height: 1, color: Colors.grey.shade200),
-                _batchRow(_batches[i]),
+                _batchRow(_batches[i], isMobile),
               ],
             )),
         ],
@@ -150,16 +182,16 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  Widget _tableHeader() {
+  Widget _tableHeader(bool isMobile) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Expanded(child: _headerCell('CAMPUS')),
-          Expanded(child: _headerCell('EXAM CODE')),
-          Expanded(child: _headerCell('EXAM TYPE')),
-          Expanded(child: _headerCell('PROGRESS')),
-          Expanded(child: _headerCell('ACTION')),
+          Expanded(flex: 2, child: _headerCell('CAMPUS')),
+          Expanded(flex: 2, child: _headerCell('EXAM CODE')),
+          Expanded(flex: 2, child: _headerCell('EXAM TYPE')),
+          Expanded(flex: 2, child: _headerCell('PROGRESS')),
+          if (!isMobile) Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTION'))),
         ],
       ),
     );
@@ -177,54 +209,80 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  Widget _batchRow(BatchSummary batch) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              batch.campusCode,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
-            ),
-          ),
-          Expanded(
-            child: Text(batch.examCode, style: const TextStyle(fontSize: 14, color: Colors.black87)),
-          ),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _examTypeBadge(batch.examType),
-            ),
-          ),
-          Expanded(child: _progressBar(batch.gradedCount, batch.totalStudents)),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ElevatedButton.icon(
-                onPressed: () => widget.onBatchSelected(BatchInfo(
-                  batchId: batch.batchId,
-                  campus: batch.campusCode,
-                  examCode: batch.examCode,
-                  examType: batch.examType,
-                  completed: batch.gradedCount,
-                  total: batch.totalStudents,
-                )),
-                icon: const Icon(Icons.arrow_forward, size: 16),
-                iconAlignment: IconAlignment.end,
-                label: const Text('Grade Batch'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _orange,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
+  Widget _batchRow(BatchSummary batch, bool isMobile) {
+    return InkWell(
+      onTap: isMobile 
+          ? null 
+          : () => widget.onBatchSelected(BatchInfo(
+              batchId: batch.batchId,
+              campus: batch.campusCode,
+              examCode: batch.examCode,
+              examType: batch.examType,
+              completed: batch.gradedCount,
+              total: batch.totalStudents,
+            )),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                batch.campusCode,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
               ),
             ),
-          ),
-        ],
+            Expanded(
+              flex: 2,
+              child: Text(
+                batch.examCode,
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _examTypeBadge(batch.examType),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '${batch.gradedCount}/${batch.totalStudents}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+              ),
+            ),
+            if (!isMobile)
+              Expanded(
+                flex: 2,
+                child: Align(
+                  alignment: Alignment.centerRight, // Đẩy nút sang phải tạo khoảng cách thoáng
+                  child: ElevatedButton.icon(
+                    onPressed: () => widget.onBatchSelected(BatchInfo(
+                      batchId: batch.batchId,
+                      campus: batch.campusCode,
+                      examCode: batch.examCode,
+                      examType: batch.examType,
+                      completed: batch.gradedCount,
+                      total: batch.totalStudents,
+                    )),
+                    icon: const Icon(Icons.arrow_forward, size: 16),
+                    iconAlignment: IconAlignment.end,
+                    label: const Text('Grade Batch'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _orange,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -248,41 +306,6 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
-
-  Widget _progressBar(int completed, int total) {
-    final progress = total == 0 ? 0.0 : (completed / total).clamp(0.0, 1.0);
-    return Row(
-      children: [
-        SizedBox(
-          width: 100,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Stack(
-              children: [
-                Container(height: 10, color: Colors.grey.shade200),
-                if (progress > 0)
-                  FractionallySizedBox(
-                    widthFactor: progress,
-                    child: Container(
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: _orange,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          '$completed/$total',
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-        ),
-      ],
-    );
-  }
 }
 
 class _StatCard extends StatelessWidget {
@@ -292,7 +315,6 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color iconBg;
   final Color iconColor;
-
   const _StatCard({
     required this.label,
     required this.value,
@@ -305,6 +327,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -314,17 +337,23 @@ class _StatCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: valueColor),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: valueColor),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),

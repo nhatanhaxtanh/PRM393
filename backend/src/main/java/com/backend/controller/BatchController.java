@@ -1,20 +1,24 @@
 package com.backend.controller;
 
+import com.backend.dto.ApiResponse;
 import com.backend.dto.BatchResponseDTO;
 import com.backend.dto.StudentSubmissionDTO;
 import com.backend.dto.ExamPaperDTO;
 import com.backend.entity.Batch;
 import com.backend.entity.Submission;
+import com.backend.entity.User;
 import com.backend.enums.BatchStatus;
 import com.backend.enums.SubmissionStatus;
 import com.backend.repository.BatchRepository;
 import com.backend.repository.SubmissionRepository;
+import com.backend.repository.UserRepository;
 import com.backend.service.AIGradingService;
 import com.backend.service.FileProcessingService;
 import com.backend.service.GradingService;
 import com.backend.dto.GradeItemDTO;
 import com.backend.dto.GradeRequestDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +26,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -35,25 +40,24 @@ public class BatchController {
     private final AIGradingService aiGradingService;
     private final FileProcessingService fileProcessingService;
     private final GradingService gradingService;
+    private final UserRepository userRepository;
 
     @GetMapping("/assigned")
-    public ResponseEntity<List<BatchResponseDTO>> getAssignedBatches() {
-        Long currentLecturerId = 1L;
+    public ResponseEntity<ApiResponse> getAssignedBatches(@RequestParam Long lecturerId) {
         List<Batch> batches = batchRepository.findByGraderIdAndStatusIn(
-                currentLecturerId, Arrays.asList(BatchStatus.PENDING, BatchStatus.IN_PROGRESS));
-        return ResponseEntity.ok(mapToBatchResponseList(batches));
+                lecturerId, Arrays.asList(BatchStatus.PENDING, BatchStatus.IN_PROGRESS));
+        return ResponseEntity.ok(ApiResponse.success(mapToBatchResponseList(batches)));
     }
 
     @GetMapping("/history")
-    public ResponseEntity<List<BatchResponseDTO>> getGradingHistory() {
-        Long currentLecturerId = 1L;
+    public ResponseEntity<ApiResponse> getGradingHistory(@RequestParam Long lecturerId) {
         List<Batch> batches = batchRepository.findByGraderIdAndStatusIn(
-                currentLecturerId, Arrays.asList(BatchStatus.COMPLETED));
-        return ResponseEntity.ok(mapToBatchResponseList(batches));
+                lecturerId, Arrays.asList(BatchStatus.COMPLETED));
+        return ResponseEntity.ok(ApiResponse.success(mapToBatchResponseList(batches)));
     }
 
     @GetMapping("/{batchId}/submissions")
-    public ResponseEntity<List<StudentSubmissionDTO>> getStudentsInBatch(@PathVariable Long batchId) {
+    public ResponseEntity<ApiResponse> getStudentsInBatch(@PathVariable Long batchId) {
         List<Submission> submissions = submissionRepository.findByBatchId(batchId);
         List<StudentSubmissionDTO> response = submissions.stream().map(sub ->
                 StudentSubmissionDTO.builder()
@@ -66,27 +70,33 @@ public class BatchController {
                         .isAIGraded(sub.getIsAIGraded())
                         .build()
         ).collect(Collectors.toList());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/{batchId}/exam-paper")
-    public ResponseEntity<ExamPaperDTO> getExamPaper(@PathVariable Long batchId) {
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new RuntimeException("Error"));
-
+    public ResponseEntity<ApiResponse> getExamPaper(@PathVariable Long batchId) {
+        Optional<Batch> batchOpt = batchRepository.findById(batchId);
+        if (batchOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(404, "Batch not found"));
+        }
+        Batch batch = batchOpt.get();
         ExamPaperDTO response = ExamPaperDTO.builder()
                 .examCode(batch.getExam().getExamCode())
                 .examPaperUrl(batch.getExam().getExamPaperUrl())
                 .build();
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/{batchId}/auto-grade-all")
-    public ResponseEntity<?> autoGradeAll(@PathVariable Long batchId) {
+    public ResponseEntity<ApiResponse> autoGradeAll(@PathVariable Long batchId) {
         try {
-            Batch batch = batchRepository.findById(batchId)
-                    .orElseThrow(() -> new RuntimeException("Batch not found"));
-
+            Optional<Batch> batchOpt = batchRepository.findById(batchId);
+            if (batchOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error(404, "Batch not found"));
+            }
+            Batch batch = batchOpt.get();
             List<Submission> submissions = submissionRepository.findByBatchId(batchId);
             Long examId = batch.getExam().getId();
 
@@ -103,10 +113,8 @@ public class BatchController {
                         continue;
                     }
 
-                    // Get submission text
                     String submissionText = fileProcessingService.processSubmissionFile(submission.getFile_url());
 
-                    // Reuse AI result for duplicate files in demo data to avoid rate limits.
                     List<GradeItemDTO> aiGrades = gradeCacheByFile.get(submission.getFile_url());
                     if (aiGrades == null) {
                         aiGrades = aiGradingService.autoGrade(examId, submissionText).block();
@@ -118,7 +126,6 @@ public class BatchController {
                         continue;
                     }
 
-                    // Save the AI grades with GRADED status
                     GradeRequestDTO gradeRequest = new GradeRequestDTO();
                     boolean needsManualReview = requiresManualReview(aiGrades);
                     gradeRequest.setStatus(needsManualReview ? "DRAFT" : "GRADED");
@@ -126,7 +133,6 @@ public class BatchController {
 
                     gradingService.saveGrades(submission.getId(), gradeRequest);
 
-                    // Mark submission as AI graded
                     submission.setIsAIGraded(!needsManualReview);
                     submissionRepository.save(submission);
 
@@ -136,27 +142,48 @@ public class BatchController {
                         gradedCount++;
                     }
                 } catch (Exception e) {
-                    // Continue with next submission if one fails
                     failedSubmissions.add("Submission " + submission.getId() + ": " + e.getMessage());
                     System.err.println("Failed to grade submission " + submission.getId() + ": " + e.getMessage());
                 }
             }
 
-            Map<String, Object> response = new java.util.HashMap<>();
-            response.put("message", "AI grading completed");
-            response.put("totalSubmissions", submissions.size());
-            response.put("gradedCount", gradedCount);
-            response.put("skippedCount", skippedCount);
-            response.put("reviewNeededCount", reviewNeededCount);
-            response.put("failedCount", failedSubmissions.size());
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("message", "AI grading completed");
+            responseData.put("totalSubmissions", submissions.size());
+            responseData.put("gradedCount", gradedCount);
+            responseData.put("skippedCount", skippedCount);
+            responseData.put("reviewNeededCount", reviewNeededCount);
+            responseData.put("failedCount", failedSubmissions.size());
             if (!failedSubmissions.isEmpty()) {
-                response.put("failedSubmissions", failedSubmissions);
+                responseData.put("failedSubmissions", failedSubmissions);
             }
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(ApiResponse.success(responseData));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(400, "Error: " + e.getMessage()));
         }
+    }
+
+    @PutMapping("/{batchId}/assign")
+    public ResponseEntity<ApiResponse> assignBatch(@PathVariable Long batchId, @RequestParam Long graderId) {
+        Optional<Batch> batchOpt = batchRepository.findById(batchId);
+        if (batchOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(404, "Không tìm thấy Lô bài (Batch)"));
+        }
+
+        Optional<User> graderOpt = userRepository.findById(graderId);
+        if (graderOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(404, "Không tìm thấy Giảng viên (Grader)"));
+        }
+
+        Batch batch = batchOpt.get();
+        batch.setGrader(graderOpt.get());
+        batchRepository.save(batch);
+
+        return ResponseEntity.ok(ApiResponse.success("Phân công lô bài thành công"));
     }
 
     private boolean requiresManualReview(List<GradeItemDTO> grades) {

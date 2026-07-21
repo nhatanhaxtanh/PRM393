@@ -1,5 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'dashboard_screen.dart';
 import '../../services/submission_service.dart';
 import '../../services/batch_service.dart';
@@ -7,7 +12,6 @@ import '../../services/batch_service.dart';
 class ReviewDocumentScreen extends StatefulWidget {
   final ReviewInfo review;
   final VoidCallback onBack;
-
   const ReviewDocumentScreen({super.key, required this.review, required this.onBack});
 
   @override
@@ -21,11 +25,14 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   int _activeTab = 0;
   String? _documentText;
   bool _loadingDoc = true;
-  ExamPaperInfo? _examPaper;
+  
   bool _loadingExamPaper = true;
   bool _submitting = false;
   bool _autoGrading = false;
+  bool _usedAI = false;
+  
   String? _pdfError;
+  Uint8List? _pdfBytes;
 
   static const _rubricItems = [
     _RubricItem('Request 1: Narrative Charter', 20),
@@ -56,7 +63,50 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
 
   Future<void> _loadExamPaper() async {
     final info = await BatchService.getExamPaper(widget.review.batchId);
-    if (mounted) setState(() { _examPaper = info; _loadingExamPaper = false; });
+    if (info == null || info.examPaperUrl.isEmpty) {
+      if (mounted) setState(() { _loadingExamPaper = false; _pdfError = 'Không tìm thấy URL đề thi.'; });
+      return;
+    }
+
+    try {
+      final response = await http.get(Uri.parse(info.examPaperUrl));
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        if (bytes.length < 5) {
+          if (mounted) setState(() {
+            _pdfError = 'Backend trả về file rỗng (0 bytes).';
+            _loadingExamPaper = false;
+          });
+          return;
+        }
+
+        // Kiểm tra xem Backend có trả về đúng file PDF không (File PDF luôn bắt đầu bằng %PDF-)
+        final header = String.fromCharCodes(bytes.sublist(0, 5));
+        if (header != '%PDF-') {
+          String preview = String.fromCharCodes(bytes.take(50).toList()).replaceAll('\n', ' ');
+          if (mounted) setState(() {
+            _pdfError = 'Backend đang không trả về PDF!\nNội dung nhận được: "$preview..."\n\n=> CÁCH FIX: Tắt Spring Boot, bấm "Clean and Build" (Reload Maven) rồi chạy lại để Server nhận file mock-exam.pdf.';
+            _loadingExamPaper = false;
+          });
+          return;
+        }
+
+        if (mounted) setState(() {
+          _pdfBytes = bytes;
+          _loadingExamPaper = false;
+        });
+      } else {
+        if (mounted) setState(() {
+          _pdfError = 'Lỗi tải PDF (Status: ${response.statusCode})';
+          _loadingExamPaper = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() {
+        _pdfError = 'Lỗi mạng (CORS hoặc sai URL): $e';
+        _loadingExamPaper = false;
+      });
+    }
   }
 
   Future<void> _autoGrade() async {
@@ -65,8 +115,9 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     if (!mounted) return;
     setState(() => _autoGrading = false);
     
-    if (aiGrades != null && aiGrades.length == _scores.length) {
-      for (int i = 0; i < aiGrades.length; i++) {
+    if (aiGrades != null) {
+      _usedAI = true;
+      for (int i = 0; i < aiGrades.length && i < _scores.length; i++) {
         _scores[i].text = aiGrades[i].awardedScore.toStringAsFixed(1);
         _comments[i].text = aiGrades[i].comments;
       }
@@ -102,7 +153,6 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       ));
       return;
     }
-
     setState(() => _submitting = true);
     final ok = await SubmissionService.saveGrades(
       widget.review.submissionId,
@@ -111,8 +161,35 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     );
     if (!mounted) return;
     setState(() => _submitting = false);
+    
     if (ok) {
-      if (!isDraft) widget.onBack();
+      if (!isDraft) {
+        widget.onBack();
+        
+        // 1. Ghi Analytics
+        FirebaseAnalytics.instance.logEvent(
+          name: 'grade_submission_success',
+          parameters: {
+            'score': _totalScore,
+            'exam_code': widget.review.examCode,
+          },
+        );
+
+        // 2. GHI LOG LÊN FIRESTORE (Tính năng mới)
+        try {
+          await FirebaseFirestore.instance.collection('grading_logs').add({
+            'studentId': widget.review.studentId,
+            'studentName': widget.review.studentName,
+            'score': _totalScore,
+            'method': _usedAI ? 'AI' : 'Manual', 
+            'examCode': widget.review.examCode,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+        } catch (e) {
+          debugPrint('Lỗi ghi Firestore: $e');
+        }
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(isDraft ? 'Draft saved' : 'Grades submitted successfully'),
         backgroundColor: isDraft ? const Color(0xFF1B2D8B) : const Color(0xFF4CAF50),
@@ -149,12 +226,9 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   }
 
   double get _totalScore => _scores.fold(0.0, (sum, c) => sum + (double.tryParse(c.text) ?? 0.0));
-
   String get _totalScoreLabel {
     final rounded = (_totalScore * 10).round() / 10;
-    return rounded == rounded.truncateToDouble()
-        ? rounded.toInt().toString()
-        : rounded.toStringAsFixed(1);
+    return rounded == rounded.truncateToDouble() ? rounded.toInt().toString() : rounded.toStringAsFixed(1);
   }
 
   @override
@@ -334,22 +408,54 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     if (_loadingExamPaper) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_examPaper == null || _examPaper!.examPaperUrl.isEmpty) {
-      return Center(
-        child: Text('Failed to load exam paper',
-            style: TextStyle(color: Colors.grey.shade500)),
-      );
-    }
+    
+    // Giao diện khi xảy ra lỗi tải PDF hoặc Parse PDF
     if (_pdfError != null) {
       return Center(
-        child: Text('PDF error: $_pdfError',
-            style: TextStyle(color: Colors.red.shade400)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              const Text('LỖI ĐỌC ĐỀ THI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+              const SizedBox(height: 8),
+              Text(_pdfError!, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700, height: 1.5)),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final info = await BatchService.getExamPaper(widget.review.batchId);
+                  if (info != null && info.examPaperUrl.isNotEmpty) {
+                    final uri = Uri.parse(info.examPaperUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  }
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Mở Đề thi ở Browser (Phương án dự phòng)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _navy,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
-    return SfPdfViewer.network(
-      _examPaper!.examPaperUrl,
+    
+    if (_pdfBytes == null) {
+      return Center(child: Text('Empty PDF data', style: TextStyle(color: Colors.grey.shade500)));
+    }
+
+    // Load PDF trực tiếp từ mảng Byte
+    return SfPdfViewer.memory(
+      _pdfBytes!,
       onDocumentLoadFailed: (PdfDocumentLoadFailedDetails details) {
-        setState(() => _pdfError = details.description);
+        setState(() => _pdfError = 'Lỗi Syncfusion PDF Viewer:\n${details.description}\n\n*Nếu chạy trên Web, hãy đảm bảo đã thêm pdf.js vào web/index.html*');
       },
     );
   }
@@ -360,9 +466,9 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: const Text('Grading Rubric',
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Text('Grading Rubric',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy)),
           ),
           const Divider(height: 1),
@@ -389,11 +495,9 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Score:',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      const Text('Total Score:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                       Text('$_totalScoreLabel / 100',
-                          style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.w800, color: _navy)),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _navy)),
                     ],
                   ),
                 ),
@@ -466,8 +570,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(item.title,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _navy)),
+          Text(item.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _navy)),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -493,8 +596,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text('/ ${item.maxScore}',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+              Text('/ ${item.maxScore}', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
             ],
           ),
           const SizedBox(height: 8),

@@ -13,12 +13,41 @@ class AuthService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return LoginResult.success(data['userId']);
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          // Lấy ID của User từ cục data
+          return LoginResult.success(body['data']['id']);
+        } else {
+          return LoginResult.failure(body['message'] ?? 'Login failed');
+        }
       } else if (response.statusCode == 401) {
-        return LoginResult.failure('Invalid ID or password');
+        final body = jsonDecode(response.body);
+        return LoginResult.failure(body['message'] ?? 'Invalid ID or password');
       } else {
         return LoginResult.failure('Server error (${response.statusCode})');
+      }
+    } catch (_) {
+      return LoginResult.failure('Cannot connect to server');
+    }
+  }
+
+  static Future<LoginResult> loginWithFirebase(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/auth/login/firebase'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          return LoginResult.success(body['data']['id']);
+        } else {
+          return LoginResult.failure(body['message'] ?? 'Login failed');
+        }
+      } else {
+        return LoginResult.failure('Lỗi xác thực hệ thống nội bộ');
       }
     } catch (_) {
       return LoginResult.failure('Cannot connect to server');

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import '../../services/auth_service.dart';
 import '../../services/app_session.dart';
 import '../dashboard/dashboard_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/presence_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,29 +31,59 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    final id = _idController.text.trim();
+    final email = _idController.text.trim(); // Bây giờ nó là Email
     final password = _passwordController.text;
 
-    if (id.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Please enter your ID and password');
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please enter your Email and password');
       return;
     }
-
     setState(() { _loading = true; _error = null; });
 
-    final result = await AuthService.login(id, password);
-
-    if (!mounted) return;
-    setState(() => _loading = false);
-
-    if (result.success) {
-      AppSession.instance.userId = result.userId;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+    try {
+      // 1. GỌI FIREBASE AUTHENTICATION ĐỂ XÁC THỰC
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email, 
+        password: password
       );
-    } else {
-      setState(() => _error = result.error);
+
+      // 2. NẾU THÀNH CÔNG, LẤY USER ID TỪ SPRING BOOT
+      final result = await AuthService.loginWithFirebase(email);
+      
+      if (!mounted) return;
+      setState(() => _loading = false);
+
+      if (result.success) {
+        AppSession.instance.userId = result.userId;
+        PresenceService.setOnline(email.replaceAll('@', '_').replaceAll('.', '_'));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        setState(() => _error = result.error);
+        FirebaseCrashlytics.instance.log('Backend sync failed for email: $email');
+      }
+      
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (e.code == 'user-not-found' || e.code == 'invalid-email') {
+          _error = 'Email không tồn tại trong hệ thống.';
+        } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+          _error = 'Sai mật khẩu, vui lòng thử lại.';
+        } else {
+          _error = 'Lỗi đăng nhập: ${e.message}';
+        }
+      });
+      FirebaseCrashlytics.instance.log('Firebase Auth Error: ${e.code}');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Đã xảy ra lỗi không xác định.';
+      });
     }
   }
 

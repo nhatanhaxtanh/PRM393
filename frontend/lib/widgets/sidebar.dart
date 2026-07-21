@@ -1,16 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/auth/login_screen.dart';
+import '../services/presence_service.dart';
+import '../services/user_service.dart';
+import '../services/app_session.dart';
 
-enum SidebarItem { dashboard, gradingHistory, profile }
+enum SidebarItem { dashboard, gradingHistory, admin, profile }
 
-class Sidebar extends StatelessWidget {
+class Sidebar extends StatefulWidget {
   final SidebarItem selected;
   final ValueChanged<SidebarItem> onSelect;
 
   const Sidebar({super.key, required this.selected, required this.onSelect});
 
+  @override
+  State<Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<Sidebar> {
   static const _navy = Color(0xFF1B2D8B);
   static const _orange = Color(0xFFF97316);
+
+  UserProfile? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  // Gọi API lấy thông tin người dùng đang đăng nhập
+  Future<void> _loadProfile() async {
+    final profile = await UserService.getProfile();
+    if (mounted) {
+      setState(() {
+        _profile = profile;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,31 +71,39 @@ class Sidebar extends StatelessWidget {
               ],
             ),
           ),
-
           _NavItem(
             icon: Icons.dashboard_outlined,
             activeIcon: Icons.dashboard,
             label: 'Dashboard',
-            active: selected == SidebarItem.dashboard,
-            onTap: () => onSelect(SidebarItem.dashboard),
+            active: widget.selected == SidebarItem.dashboard,
+            onTap: () => widget.onSelect(SidebarItem.dashboard),
           ),
           _NavItem(
             icon: Icons.access_time_outlined,
             activeIcon: Icons.access_time,
             label: 'Grading History',
-            active: selected == SidebarItem.gradingHistory,
-            onTap: () => onSelect(SidebarItem.gradingHistory),
+            active: widget.selected == SidebarItem.gradingHistory,
+            onTap: () => widget.onSelect(SidebarItem.gradingHistory),
           ),
+          // CHỈ HIỂN THỊ MENU ADMIN NẾU LÀ TÀI KHOẢN ADMIN
+          if (_profile?.role == 'ADMIN')
+            _NavItem(
+              icon: Icons.admin_panel_settings_outlined,
+              activeIcon: Icons.admin_panel_settings,
+              label: 'Admin Dashboard',
+              active: widget.selected == SidebarItem.admin,
+              onTap: () => widget.onSelect(SidebarItem.admin),
+            ),
           _NavItem(
             icon: Icons.person_outline,
             activeIcon: Icons.person,
             label: 'Profile & Settings',
-            active: selected == SidebarItem.profile,
-            onTap: () => onSelect(SidebarItem.profile),
+            active: widget.selected == SidebarItem.profile,
+            onTap: () => widget.onSelect(SidebarItem.profile),
           ),
-
           const Spacer(),
-
+          
+          // KHU VỰC HIỂN THỊ THÔNG TIN USER (DYNAMIC)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
@@ -83,30 +118,33 @@ class Sidebar extends StatelessWidget {
                   child: const Icon(Icons.person, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Lecturer',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _profile?.fullName ?? 'Loading...',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    Text(
-                      'GV1234',
-                      style: TextStyle(
-                        color: Colors.white.withAlpha(153),
-                        fontSize: 12,
+                      Text(
+                        _profile != null ? '${_profile!.role} | ${_profile!.username}' : '...',
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(153),
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
             child: Material(
@@ -114,16 +152,33 @@ class Sidebar extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               child: InkWell(
                 borderRadius: BorderRadius.circular(8),
-                onTap: () => Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (_) => false,
-                ),
+                onTap: () async {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null && user.email != null) {
+                    final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+                    await PresenceService.setOffline(key);
+                    await FirebaseAuth.instance.signOut();
+                  }
+                  AppSession.instance.clear();
+                  if (!context.mounted) return;
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (_) => false,
+                  );
+                },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   child: Row(
                     children: [
-                      Icon(Icons.logout, color: Colors.white.withAlpha(153), size: 18),
+                      Icon(
+                        Icons.logout,
+                        color: Colors.white.withAlpha(153),
+                        size: 18,
+                      ),
                       const SizedBox(width: 10),
                       Text(
                         'Logout',

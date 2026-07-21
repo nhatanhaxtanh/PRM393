@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'app_session.dart';
 
 class ExamPaperInfo {
   final String examCode;
   final String examPaperUrl;
+
   const ExamPaperInfo({required this.examCode, required this.examPaperUrl});
+
   factory ExamPaperInfo.fromJson(Map<String, dynamic> json) => ExamPaperInfo(
         examCode: json['examCode'] ?? '',
         examPaperUrl: json['examPaperUrl'] ?? '',
@@ -69,8 +72,9 @@ class StudentSubmission {
       final d = raw[2].toString().padLeft(2, '0');
       final h = raw[3].toString().padLeft(2, '0');
       final mi = raw[4].toString().padLeft(2, '0');
-      time = '$y-$mo-$d $h:$mi'; // format from LocalDateTime array
+      time = '$y-$mo-$d $h:$mi'; 
     }
+
     return StudentSubmission(
       submissionId: json['submissionId'] as int,
       studentId: json['studentId'] ?? '',
@@ -88,21 +92,38 @@ class BatchService {
 
   static Future<List<BatchSummary>> getAssignedBatches() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/api/batches/assigned'));
+      final lecturerId = AppSession.instance.userId ?? 1;
+      final response = await http.get(Uri.parse('$_baseUrl/api/batches/assigned?lecturerId=$lecturerId'));
+      
       if (response.statusCode == 200) {
-        final List<dynamic> list = jsonDecode(response.body);
-        return list.map((e) => BatchSummary.fromJson(e)).toList();
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          final List<dynamic> list = body['data'];
+          return list.map((e) => BatchSummary.fromJson(e)).toList();
+        }
       }
     } catch (_) {}
     return [];
   }
 
-  static Future<List<StudentSubmission>> getSubmissionsByBatch(int batchId) async {
+  static Future<List<StudentSubmission>> getSubmissionsByBatch(
+    int batchId, {
+    String keyword = '',
+    String status = 'ALL',
+  }) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/api/batches/$batchId/submissions'));
+      String url = '$_baseUrl/api/submissions/batch/$batchId?page=0&size=50';
+      if (keyword.isNotEmpty) url += '&keyword=$keyword';
+      if (status != 'ALL') url += '&status=$status';
+
+      final response = await http.get(Uri.parse(url));
+      
       if (response.statusCode == 200) {
-        final List<dynamic> list = jsonDecode(response.body);
-        return list.map((e) => StudentSubmission.fromJson(e)).toList();
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          final List<dynamic> list = body['data']['content'] ?? [];
+          return list.map((e) => StudentSubmission.fromJson(e)).toList();
+        }
       }
     } catch (_) {}
     return [];
@@ -112,7 +133,21 @@ class BatchService {
     try {
       final response = await http.get(Uri.parse('$_baseUrl/api/batches/$batchId/exam-paper'));
       if (response.statusCode == 200) {
-        return ExamPaperInfo.fromJson(jsonDecode(response.body));
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          
+          String rawUrl = body['data']['examPaperUrl'] ?? '';
+          
+          if (rawUrl.contains('localhost')) {
+            final uri = Uri.parse(_baseUrl);
+            rawUrl = rawUrl.replaceAll('localhost', uri.host);
+          }
+
+          return ExamPaperInfo(
+            examCode: body['data']['examCode'] ?? '',
+            examPaperUrl: rawUrl,
+          );
+        }
       }
     } catch (_) {}
     return null;
@@ -120,10 +155,14 @@ class BatchService {
 
   static Future<List<BatchSummary>> getGradingHistory() async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/api/batches/history'));
+      final lecturerId = AppSession.instance.userId ?? 1;
+      final response = await http.get(Uri.parse('$_baseUrl/api/batches/history?lecturerId=$lecturerId'));
       if (response.statusCode == 200) {
-        final List<dynamic> list = jsonDecode(response.body);
-        return list.map((e) => BatchSummary.fromJson(e)).toList();
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          final List<dynamic> list = body['data'];
+          return list.map((e) => BatchSummary.fromJson(e)).toList();
+        }
       }
     } catch (_) {}
     return [];
@@ -136,7 +175,10 @@ class BatchService {
         headers: {'Content-Type': 'application/json'},
       );
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          return body['data'];
+        }
       }
     } catch (_) {}
     return null;

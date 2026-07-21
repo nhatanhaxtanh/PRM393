@@ -19,10 +19,17 @@ public class User {
     private String username;
 
     @Column(name = "password_hash", nullable = false)
-    private String passwordHash; // use number now for demo
+    private String passwordHash;
 
     @Column(name = "full_name")
     private String fullName;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campus_id")
+    private Campus campus;
+
+    @Column(unique = true)
+    private String email;
 
     @Column(length = 20)
     private String role; // ADMIN, GRADER

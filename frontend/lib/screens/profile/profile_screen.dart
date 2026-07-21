@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/user_service.dart';
+import '../../services/batch_service.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -14,18 +15,39 @@ class _ProfileTabState extends State<ProfileTab> {
 
   UserProfile? _profile;
   bool _loading = true;
+  int _completedCount = 0;
+  int _pendingCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
+    _loadProfileAndStats();
   }
 
-  Future<void> _loadProfile() async {
+  Future<void> _loadProfileAndStats() async {
     final profile = await UserService.getProfile();
+    final assignedBatches = await BatchService.getAssignedBatches();
+    final historyBatches = await BatchService.getGradingHistory();
+
+    // Tính toán số liệu thực tế từ dữ liệu API
+    int totalCompleted = 0;
+    for (var b in historyBatches) {
+      totalCompleted += b.gradedCount;
+    }
+    for (var b in assignedBatches) {
+      totalCompleted += b.gradedCount;
+    }
+
+    int totalPending = 0;
+    for (var b in assignedBatches) {
+      totalPending += (b.totalStudents - b.gradedCount);
+    }
+
     if (mounted) {
       setState(() {
         _profile = profile;
+        _completedCount = totalCompleted;
+        _pendingCount = totalPending;
         _loading = false;
       });
     }
@@ -48,7 +70,6 @@ class _ProfileTabState extends State<ProfileTab> {
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 28),
-
           if (_loading)
             const Center(child: CircularProgressIndicator())
           else
@@ -81,52 +102,63 @@ class _ProfileTabState extends State<ProfileTab> {
     final displayName = _profile?.fullName ?? 'Lecturer';
     final displayId = _profile?.username ?? 'GV1234';
     final displayRole = _profile?.role ?? 'Lecturer';
-
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, 28),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: _navy.withAlpha(8),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Wrap(
+        spacing: 24,
+        runSpacing: 16,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: const BoxDecoration(color: _orange, shape: BoxShape.circle),
-            child: const Icon(Icons.person, color: Colors.white, size: 36),
-          ),
-          const SizedBox(width: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                displayName,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: _navy),
-              ),
-              const SizedBox(height: 4),
-              Text(displayId, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
-              const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _orange.withAlpha(25),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  displayRole,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _orange),
-                ),
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(color: _orange, shape: BoxShape.circle),
+                child: const Icon(Icons.person, color: Colors.white, size: 32),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(displayId, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _orange.withAlpha(25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      displayRole,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _orange),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const Spacer(),
-          _statBadge('31', 'Completed'),
-          const SizedBox(width: 24),
-          _statBadge('44', 'Pending'),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _statBadge(_completedCount.toString(), 'Completed'),
+              const SizedBox(width: 24),
+              _statBadge(_pendingCount.toString(), 'Pending'),
+            ],
+          ),
         ],
       ),
     );
@@ -137,7 +169,7 @@ class _ProfileTabState extends State<ProfileTab> {
       children: [
         Text(
           value,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _navy),
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _navy),
         ),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
@@ -146,12 +178,11 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Widget _infoSection() {
-    final fullName = _profile?.fullName ?? '—';
-    final username = _profile?.username ?? '—';
-    final role = _profile?.role ?? '—';
-
+    final fullName = _profile?.fullName ?? '';
+    final username = _profile?.username ?? '';
+    final role = _profile?.role ?? '';
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(24),
       child: Column(
         children: [
           Row(
@@ -163,7 +194,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   value: fullName,
                 ),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 16),
               Expanded(
                 child: _infoRow(
                   icon: Icons.badge_outlined,
@@ -173,7 +204,7 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
@@ -183,7 +214,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   value: role,
                 ),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 16),
               Expanded(
                 child: _infoRow(
                   icon: Icons.business_outlined,
@@ -203,25 +234,27 @@ class _ProfileTabState extends State<ProfileTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 40,
-          height: 40,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
             color: _navy.withAlpha(15),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 18, color: _navy),
         ),
-        const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-            const SizedBox(height: 3),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87),
-            ),
-          ],
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+              ),
+            ],
+          ),
         ),
       ],
     );
