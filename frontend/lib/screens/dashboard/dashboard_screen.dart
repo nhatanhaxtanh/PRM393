@@ -8,6 +8,14 @@ import 'review_document_screen.dart';
 import '../profile/profile_screen.dart';
 import 'admin_tab.dart';
 import '../../services/user_service.dart';
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import '../../services/presence_service.dart';
+import '../../services/app_session.dart';
+import '../auth/login_screen.dart';
+import '../../services/batch_service.dart';
+
 
 class BatchInfo {
   final int batchId;
@@ -56,50 +64,198 @@ class _DashboardScreenState extends State<DashboardScreen> {
   SidebarItem _selected = SidebarItem.dashboard;
   BatchInfo? _selectedBatch;
   ReviewInfo? _selectedReview;
-  UserProfile? _profile; // Thêm biến lưu profile
+  UserProfile? _profile;
+  StreamSubscription? _disableSubscription;
+  StreamSubscription? _remindSubscription;
 
   @override
   void initState() {
     super.initState();
     FirebaseAnalytics.instance.logEvent(name: 'view_dashboard');
     _loadProfile();
+    _listenForAccountDisable();
+    _listenForReminders();
   }
 
-  // Load profile để biết là ADMIN hay GV
+  void _listenForAccountDisable() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+      _disableSubscription = FirebaseDatabase.instance
+          .ref('status/$key/is_disabled')
+          .onValue
+          .listen((event) {
+            if (event.snapshot.value == true) {
+              _showDisabledDialog();
+            }
+          });
+    }
+  }
+
+  void _showDisabledDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible:
+          false, // Bắt buộc user phải bấm nút Đăng xuất, không cho bấm ra ngoài
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.block, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Tài khoản bị khóa', style: TextStyle(color: Colors.red)),
+          ],
+        ),
+        content: const Text(
+          'Quản trị viên đã vô hiệu hóa tài khoản của bạn.\nBạn không thể tiếp tục sử dụng hệ thống. Vui lòng liên hệ Admin.',
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              // 1. Dọn dẹp cờ khóa để sau này Admin mở lại thì không bị văng tiếp
+              final user = FirebaseAuth.instance.currentUser;
+              if (user != null && user.email != null) {
+                final key = user.email!
+                    .replaceAll('@', '_')
+                    .replaceAll('.', '_');
+                await FirebaseDatabase.instance
+                    .ref('status/$key/is_disabled')
+                    .remove();
+                await PresenceService.setOffline(
+                  key,
+                ); // Hiện đèn xám Offline cho Admin thấy
+              }
+              // 2. Clear Session & Đăng xuất
+              await FirebaseAuth.instance.signOut();
+              AppSession.instance.clear();
+              if (mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (_) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Đăng xuất'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _listenForReminders() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+      _remindSubscription = FirebaseDatabase.instance
+          .ref('status/$key/remind_time')
+          .onValue
+          .listen((event) {
+        if (event.snapshot.value != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.notifications_active, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('🔔 QUẢN TRỊ VIÊN: Bạn có lô bài cần chấm gấp!')),
+                ],
+              ),
+              backgroundColor: Colors.blue,
+              duration: Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  // TẮT LUỒNG LẮNG NGHE KHI THOÁT TRANG ĐỂ TRÁNH TRÀN RAM
+  @override
+  void dispose() {
+    _disableSubscription?.cancel();
+    _remindSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadProfile() async {
     final profile = await UserService.getProfile();
     if (mounted) {
-      setState(() => _profile = profile);
+      setState(() {
+        _profile = profile;
+        if (profile?.role == 'ADMIN' && _selected == SidebarItem.dashboard) {
+          _selected = SidebarItem.admin;
+        }
+      });
     }
   }
 
   Widget get _body {
-    if (_selectedReview != null) {
-      return ReviewDocumentScreen(
-        review: _selectedReview!,
-        onBack: () => setState(() => _selectedReview = null),
-      );
-    }
-    if (_selectedBatch != null) {
-      return BatchDetailScreen(
-        batch: _selectedBatch!,
-        onBack: () => setState(() => _selectedBatch = null),
-        onReviewSelected: (r) => setState(() => _selectedReview = r),
-      );
-    }
-    return switch (_selected) {
-      SidebarItem.dashboard => HomeTab(
-        onBatchSelected: (b) => setState(() => _selectedBatch = b),
-      ),
-      SidebarItem.gradingHistory => const HistoryTab(),
-      SidebarItem.admin => const AdminTab(),
-      SidebarItem.profile => const ProfileTab(),
-    };
+    // Xác định index cho IndexedStack
+    int currentIndex = 0;
+    if (_selected == SidebarItem.dashboard)
+      currentIndex = 0;
+    else if (_selected == SidebarItem.gradingHistory)
+      currentIndex = 1;
+    else if (_selected == SidebarItem.admin)
+      currentIndex = 2;
+    else if (_selected == SidebarItem.profile)
+      currentIndex = 3;
+
+    return Stack(
+      children: [
+        // ==========================================
+        // LỚP 1: CÁC TAB CHÍNH (Giữ nguyên State 100%)
+        // ==========================================
+        Offstage(
+          offstage: _selectedBatch != null || _selectedReview != null,
+          child: IndexedStack(
+            index: currentIndex,
+            children: [
+              HomeTab(
+                onBatchSelected: (b) => setState(() => _selectedBatch = b),
+              ),
+              const HistoryTab(),
+              // Chỉ load ngầm AdminTab nếu tài khoản là ADMIN
+              _profile?.role == 'ADMIN'
+                  ? const AdminTab()
+                  : const SizedBox.shrink(),
+              const ProfileTab(),
+            ],
+          ),
+        ),
+
+        // ==========================================
+        // LỚP 2: MÀN HÌNH CHI TIẾT LÔ BÀI
+        // ==========================================
+        if (_selectedBatch != null && _selectedReview == null)
+          BatchDetailScreen(
+            batch: _selectedBatch!,
+            onBack: () => setState(() => _selectedBatch = null),
+            onReviewSelected: (r) => setState(() => _selectedReview = r),
+          ),
+
+        // ==========================================
+        // LỚP 3: MÀN HÌNH CHẤM BÀI PDF
+        // ==========================================
+        if (_selectedReview != null)
+          ReviewDocumentScreen(
+            review: _selectedReview!,
+            onBack: () => setState(() => _selectedReview = null),
+          ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // KÍCH HOẠT RESPONSIVE: Cắt mốc 850px
+    if (_profile == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final isMobile = MediaQuery.of(context).size.width < 850;
     final isAdmin = _profile?.role == 'ADMIN';
 
@@ -107,29 +263,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // GIAO DIỆN MOBILE
     // ------------------------------------
     if (isMobile) {
-      final navItems = [
-        const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Home'),
-        const BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-      ];
-      if (isAdmin) {
-        navItems.add(const BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: 'Admin'));
-      }
-      navItems.add(const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'));
+      final navItems = isAdmin
+          ? const [
+              BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
+              BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+            ]
+          : const [
+              BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Home'),
+              BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
+              BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+            ];
 
-      // Ánh xạ lại index cho Enum
       int getIndex() {
-        if (_selected == SidebarItem.dashboard) return 0;
-        if (_selected == SidebarItem.gradingHistory) return 1;
-        if (isAdmin && _selected == SidebarItem.admin) return 2;
-        return isAdmin ? 3 : 2; // Profile tab
+        if (isAdmin) {
+          return _selected == SidebarItem.admin ? 0 : 1;
+        } else {
+          if (_selected == SidebarItem.dashboard) return 0;
+          if (_selected == SidebarItem.gradingHistory) return 1;
+          return 2;
+        }
       }
 
       return Scaffold(
         backgroundColor: const Color(0xFFF5F6FA),
         appBar: AppBar(
           backgroundColor: const Color(0xFF1B2D8B),
-          title: const Text('PE Grading System', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          title: const Text(
+            'PE Grading System',
+            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              onPressed: _logout, // Nút Logout trên góc phải
+            )
+          ],
         ),
         body: _body,
         bottomNavigationBar: BottomNavigationBar(
@@ -142,11 +311,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             setState(() {
               _selectedBatch = null;
               _selectedReview = null;
-              
-              if (index == 0) _selected = SidebarItem.dashboard;
-              else if (index == 1) _selected = SidebarItem.gradingHistory;
-              else if (isAdmin && index == 2) _selected = SidebarItem.admin;
-              else _selected = SidebarItem.profile;
+              if (isAdmin) {
+                _selected = index == 0 ? SidebarItem.admin : SidebarItem.profile;
+              } else {
+                if (index == 0) _selected = SidebarItem.dashboard;
+                else if (index == 1) _selected = SidebarItem.gradingHistory;
+                else _selected = SidebarItem.profile;
+              }
             });
           },
           items: navItems,
@@ -180,5 +351,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    AppSession.instance.clear();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 }

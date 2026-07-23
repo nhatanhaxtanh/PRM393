@@ -186,6 +186,22 @@ public class BatchController {
         return ResponseEntity.ok(ApiResponse.success("Phân công lô bài thành công"));
     }
 
+    @GetMapping("/all-active")
+    public ResponseEntity<ApiResponse> getAllActiveBatches() {
+        List<Batch> batches = batchRepository.findAll().stream()
+                .filter(b -> b.getStatus() == BatchStatus.IN_PROGRESS || b.getStatus() == BatchStatus.PENDING)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(mapToBatchResponseList(batches)));
+    }
+
+    @GetMapping("/all-history")
+    public ResponseEntity<ApiResponse> getAllHistoryBatches() {
+        List<Batch> batches = batchRepository.findAll().stream()
+                .filter(b -> b.getStatus() == BatchStatus.COMPLETED)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(mapToBatchResponseList(batches)));
+    }
+
     private boolean requiresManualReview(List<GradeItemDTO> grades) {
         return grades.stream().anyMatch(grade ->
                 grade.getComments() != null && grade.getComments().contains("could not be parsed"));
@@ -202,6 +218,8 @@ public class BatchController {
                     .examType(batch.getExam().getExamType())
                     .totalStudents(total)
                     .gradedCount(graded)
+                    .graderName(batch.getGrader() != null ? batch.getGrader().getFullName() : "Chưa cập nhật")
+                    .graderEmail(batch.getGrader() != null ? batch.getGrader().getEmail() : "")
                     .build();
         }).collect(Collectors.toList());
     }

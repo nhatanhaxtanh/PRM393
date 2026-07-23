@@ -46,6 +46,7 @@ public class DataInitializer implements CommandLineRunner {
                     .passwordHash("123456")
                     .fullName("Trần Quản Trị")
                     .role("ADMIN")
+                    .status("ACTIVE")
                     .build());
 
             User grader = userRepository.save(User.builder()
@@ -55,6 +56,7 @@ public class DataInitializer implements CommandLineRunner {
                     .fullName("Nguyễn Giảng Viên")
                     .role("GRADER")
                     .campus(campusHCM)
+                    .status("ACTIVE")
                     .build());
 
             User grader2 = userRepository.save(User.builder()
@@ -64,6 +66,7 @@ public class DataInitializer implements CommandLineRunner {
                     .fullName("Lê Tuấn Anh")
                     .role("GRADER")
                     .campus(campusHN)
+                    .status("ACTIVE")
                     .build());
 
             // 3. Tạo Đề thi PMG
@@ -238,8 +241,47 @@ public class DataInitializer implements CommandLineRunner {
                 submissionRepository.save(submission);
             }
 
+            Exam examPE203 = examRepository.save(Exam.builder()
+                    .examCode("PE_203_Spring26")
+                    .term("Spring2026")
+                    .examType("FIRST_ATTEMPT")
+                    .examPaperUrl("https://prm-assignment.s3.ap-southeast-1.amazonaws.com/mock-exam.pdf")
+                    .build());
+
+            Batch batchNew = batchRepository.save(Batch.builder()
+                    .exam(examPE203)
+                    .campus(campusHCM)
+                    .grader(grader)
+                    .status(BatchStatus.IN_PROGRESS)
+                    .build());
+
+            for (int i = 1; i <= 10; i++) {
+                String ho = hoList[random.nextInt(hoList.length)];
+                String dem = demList[random.nextInt(demList.length)];
+                String ten = tenList[random.nextInt(tenList.length)];
+                String fullName = ho + " " + dem + " " + ten;
+                String studentId = "SE" + (160000 + i);
+
+                Student student = studentRepository.save(Student.builder()
+                        .studentId(studentId)
+                        .fullName(fullName)
+                        .build());
+
+                LocalDateTime subTime = LocalDateTime.now().minusDays(1).minusHours(i);
+
+                Submission submission = Submission.builder()
+                        .batch(batchNew)
+                        .student(student)
+                        .file_url(dummyFilePath)
+                        .submissionTime(subTime)
+                        .status(SubmissionStatus.NOT_GRADED) // Toàn bộ đều chưa chấm
+                        .build();
+
+                submissionRepository.save(submission);
+            }
+
             System.out.println("--- KHỞI TẠO DỮ LIỆU THÀNH CÔNG ---");
-            System.out.println("Đã tạo 1 lô bài gồm 40 sinh viên với các trạng thái chấm ngẫu nhiên và 1 lô lịch sử 10 bài hoàn thành.");
+            System.out.println("Đã tạo 1 lô bài gồm 40 sinh viên, 1 lô lịch sử 10 bài hoàn thành, và 1 lô bài mới 10 bài chưa chấm.");
         }
     }
 }

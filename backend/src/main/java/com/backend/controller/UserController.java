@@ -41,6 +41,7 @@ public class UserController {
                         .fullName(u.getFullName())
                         .role(u.getRole())
                         .campusName(u.getCampus() != null ? u.getCampus().getCampusName() : "System / Global")
+                        .status(u.getStatus() != null ? u.getStatus() : "ACTIVE")
                         .build())
                 .toList();
         return ResponseEntity.ok(ApiResponse.success(users));

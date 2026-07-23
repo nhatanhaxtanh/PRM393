@@ -71,20 +71,22 @@ class _SidebarState extends State<Sidebar> {
               ],
             ),
           ),
-          _NavItem(
-            icon: Icons.dashboard_outlined,
-            activeIcon: Icons.dashboard,
-            label: 'Dashboard',
-            active: widget.selected == SidebarItem.dashboard,
-            onTap: () => widget.onSelect(SidebarItem.dashboard),
-          ),
-          _NavItem(
-            icon: Icons.access_time_outlined,
-            activeIcon: Icons.access_time,
-            label: 'Grading History',
-            active: widget.selected == SidebarItem.gradingHistory,
-            onTap: () => widget.onSelect(SidebarItem.gradingHistory),
-          ),
+          if (_profile?.role != 'ADMIN') ...[
+            _NavItem(
+              icon: Icons.dashboard_outlined,
+              activeIcon: Icons.dashboard,
+              label: 'Dashboard',
+              active: widget.selected == SidebarItem.dashboard,
+              onTap: () => widget.onSelect(SidebarItem.dashboard),
+            ),
+            _NavItem(
+              icon: Icons.access_time_outlined,
+              activeIcon: Icons.access_time,
+              label: 'Grading History',
+              active: widget.selected == SidebarItem.gradingHistory,
+              onTap: () => widget.onSelect(SidebarItem.gradingHistory),
+            ),
+          ],
           // CHỈ HIỂN THỊ MENU ADMIN NẾU LÀ TÀI KHOẢN ADMIN
           if (_profile?.role == 'ADMIN')
             _NavItem(
@@ -102,7 +104,7 @@ class _SidebarState extends State<Sidebar> {
             onTap: () => widget.onSelect(SidebarItem.profile),
           ),
           const Spacer(),
-          
+
           // KHU VỰC HIỂN THỊ THÔNG TIN USER (DYNAMIC)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -115,7 +117,11 @@ class _SidebarState extends State<Sidebar> {
                     color: _orange,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.person, color: Colors.white, size: 20),
+                  child: const Icon(
+                    Icons.person,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -132,7 +138,9 @@ class _SidebarState extends State<Sidebar> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        _profile != null ? '${_profile!.role} | ${_profile!.username}' : '...',
+                        _profile != null
+                            ? '${_profile!.role} | ${_profile!.username}'
+                            : '...',
                         style: TextStyle(
                           color: Colors.white.withAlpha(153),
                           fontSize: 12,
@@ -155,7 +163,9 @@ class _SidebarState extends State<Sidebar> {
                 onTap: () async {
                   final user = FirebaseAuth.instance.currentUser;
                   if (user != null && user.email != null) {
-                    final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+                    final key = user.email!
+                        .replaceAll('@', '_')
+                        .replaceAll('.', '_');
                     await PresenceService.setOffline(key);
                     await FirebaseAuth.instance.signOut();
                   }

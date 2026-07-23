@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/batch_service.dart';
+import '../../services/user_service.dart';
 
 class HistoryTab extends StatefulWidget {
   const HistoryTab({super.key});
@@ -22,7 +23,15 @@ class _HistoryTabState extends State<HistoryTab> {
   }
 
   Future<void> _loadHistory() async {
-    final batches = await BatchService.getGradingHistory();
+    final profile = await UserService.getProfile();
+    List<BatchSummary> batches = [];
+    
+    if (profile != null && profile.role == 'ADMIN') {
+      batches = await BatchService.getAllHistoryBatches();
+    } else {
+      batches = await BatchService.getGradingHistory();
+    }
+
     if (mounted) {
       setState(() {
         _batches = batches;
@@ -70,38 +79,43 @@ class _HistoryTabState extends State<HistoryTab> {
                 ),
                 const SizedBox(height: 20),
                 
-                // Bọc trong SingleChildScrollView để chống tràn phải (overflow) trên mobile
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 550),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _tableHeader(),
-                        if (_loading)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 32),
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else if (_batches.isEmpty)
-                          Padding(
-                            padding: EdgeInsets.symmetric(vertical: 32),
-                            child: Center(
-                              child: Text('No completed batches',
-                                  style: TextStyle(color: Colors.grey.shade500)),
-                            ),
-                          )
-                        else
-                          ...List.generate(_batches.length, (i) => Column(
-                            children: [
-                              Divider(height: 1, color: Colors.grey.shade200),
-                              _batchRow(_batches[i]),
-                            ],
-                          )),
-                      ],
-                    ),
-                  ),
+                // CÁCH FIX CHUẨN: Dùng LayoutBuilder để Expanded biết được chiều rộng mà chia tỷ lệ
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        // Chốt cứng tối thiểu 600px cho mobile cuộn ngang, lớn hơn thì giãn hết cỡ
+                        width: constraints.maxWidth > 600 ? constraints.maxWidth : 600,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _tableHeader(),
+                            if (_loading)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 32),
+                                child: Center(child: CircularProgressIndicator()),
+                              )
+                            else if (_batches.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 32),
+                                child: Center(
+                                  child: Text('No completed batches',
+                                      style: TextStyle(color: Colors.grey.shade500)),
+                                ),
+                              )
+                            else
+                              ...List.generate(_batches.length, (i) => Column(
+                                children: [
+                                  Divider(height: 1, color: Colors.grey.shade200),
+                                  _batchRow(_batches[i]),
+                                ],
+                              )),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
                 ),
               ],
             ),
@@ -116,11 +130,11 @@ class _HistoryTabState extends State<HistoryTab> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Expanded(child: _headerCell('CAMPUS')),
-          Expanded(child: _headerCell('EXAM CODE')),
-          Expanded(child: _headerCell('EXAM TYPE')),
-          Expanded(child: _headerCell('STUDENTS GRADED')),
-          Expanded(child: _headerCell('STATUS')),
+          Expanded(flex: 2, child: _headerCell('CAMPUS')),
+          Expanded(flex: 2, child: _headerCell('EXAM CODE')),
+          Expanded(flex: 2, child: _headerCell('EXAM TYPE')),
+          Expanded(flex: 2, child: _headerCell('STUDENTS GRADED')),
+          Expanded(flex: 2, child: _headerCell('STATUS')),
         ],
       ),
     );
@@ -141,27 +155,32 @@ class _HistoryTabState extends State<HistoryTab> {
       child: Row(
         children: [
           Expanded(
+            flex: 2,
             child: Text(batch.campusCode,
                 style: const TextStyle(
                     fontSize: 14, fontWeight: FontWeight.w500, color: _navy)),
           ),
           Expanded(
+            flex: 2,
             child: Text(batch.examCode,
                 style: const TextStyle(fontSize: 14, color: Colors.black87)),
           ),
           Expanded(
+            flex: 2,
             child: Align(
               alignment: Alignment.centerLeft,
               child: _examTypeBadge(batch.examType),
             ),
           ),
           Expanded(
+            flex: 2,
             child: Text(
               '${batch.gradedCount}/${batch.totalStudents}',
               style: const TextStyle(fontSize: 14, color: Colors.black87),
             ),
           ),
           Expanded(
+            flex: 2,
             child: Align(
               alignment: Alignment.centerLeft,
               child: _completedBadge(),

@@ -9,9 +9,9 @@ class ExamPaperInfo {
   const ExamPaperInfo({required this.examCode, required this.examPaperUrl});
 
   factory ExamPaperInfo.fromJson(Map<String, dynamic> json) => ExamPaperInfo(
-        examCode: json['examCode'] ?? '',
-        examPaperUrl: json['examPaperUrl'] ?? '',
-      );
+    examCode: json['examCode'] ?? '',
+    examPaperUrl: json['examPaperUrl'] ?? '',
+  );
 }
 
 class BatchSummary {
@@ -21,6 +21,8 @@ class BatchSummary {
   final String examType;
   final int totalStudents;
   final int gradedCount;
+  final String graderName;
+  final String graderEmail;
 
   const BatchSummary({
     required this.batchId,
@@ -29,16 +31,20 @@ class BatchSummary {
     required this.examType,
     required this.totalStudents,
     required this.gradedCount,
+    this.graderName = '',
+    this.graderEmail = '',
   });
 
   factory BatchSummary.fromJson(Map<String, dynamic> json) => BatchSummary(
-        batchId: json['batchId'] as int,
-        campusCode: json['campusCode'] ?? '',
-        examCode: json['examCode'] ?? '',
-        examType: json['examType'] ?? '',
-        totalStudents: json['totalStudents'] as int? ?? 0,
-        gradedCount: json['gradedCount'] as int? ?? 0,
-      );
+    batchId: json['batchId'] as int,
+    campusCode: json['campusCode'] ?? '',
+    examCode: json['examCode'] ?? '',
+    examType: json['examType'] ?? '',
+    totalStudents: json['totalStudents'] as int? ?? 0,
+    gradedCount: json['gradedCount'] as int? ?? 0,
+    graderName: json['graderName'] ?? 'Nguyễn Giảng Viên',
+    graderEmail: json['graderEmail'] ?? 'gv1234@fpt.edu.vn',
+  );
 }
 
 class StudentSubmission {
@@ -72,7 +78,7 @@ class StudentSubmission {
       final d = raw[2].toString().padLeft(2, '0');
       final h = raw[3].toString().padLeft(2, '0');
       final mi = raw[4].toString().padLeft(2, '0');
-      time = '$y-$mo-$d $h:$mi'; 
+      time = '$y-$mo-$d $h:$mi';
     }
 
     return StudentSubmission(
@@ -93,8 +99,26 @@ class BatchService {
   static Future<List<BatchSummary>> getAssignedBatches() async {
     try {
       final lecturerId = AppSession.instance.userId ?? 1;
-      final response = await http.get(Uri.parse('$_baseUrl/api/batches/assigned?lecturerId=$lecturerId'));
-      
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/batches/assigned?lecturerId=$lecturerId'),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          final List<dynamic> list = body['data'];
+          return list.map((e) => BatchSummary.fromJson(e)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<List<BatchSummary>> getAllActiveBatches() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/batches/all-active'),
+      );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['status'] == 200 && body['data'] != null) {
@@ -117,7 +141,7 @@ class BatchService {
       if (status != 'ALL') url += '&status=$status';
 
       final response = await http.get(Uri.parse(url));
-      
+
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['status'] == 200 && body['data'] != null) {
@@ -131,13 +155,14 @@ class BatchService {
 
   static Future<ExamPaperInfo?> getExamPaper(int batchId) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/api/batches/$batchId/exam-paper'));
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/batches/$batchId/exam-paper'),
+      );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['status'] == 200 && body['data'] != null) {
-          
           String rawUrl = body['data']['examPaperUrl'] ?? '';
-          
+
           if (rawUrl.contains('localhost')) {
             final uri = Uri.parse(_baseUrl);
             rawUrl = rawUrl.replaceAll('localhost', uri.host);
@@ -156,7 +181,9 @@ class BatchService {
   static Future<List<BatchSummary>> getGradingHistory() async {
     try {
       final lecturerId = AppSession.instance.userId ?? 1;
-      final response = await http.get(Uri.parse('$_baseUrl/api/batches/history?lecturerId=$lecturerId'));
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/batches/history?lecturerId=$lecturerId'),
+      );
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['status'] == 200 && body['data'] != null) {
@@ -182,5 +209,21 @@ class BatchService {
       }
     } catch (_) {}
     return null;
+  }
+
+  static Future<List<BatchSummary>> getAllHistoryBatches() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/api/batches/all-history'),
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body['status'] == 200 && body['data'] != null) {
+          final List<dynamic> list = body['data'];
+          return list.map((e) => BatchSummary.fromJson(e)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
   }
 }

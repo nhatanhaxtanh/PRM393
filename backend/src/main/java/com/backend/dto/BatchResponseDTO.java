@@ -12,4 +12,6 @@ public class BatchResponseDTO {
     private String examType;     // VD: RETAKE
     private int totalStudents;
     private int gradedCount;     // Để UI vẽ Progress Bar (VD: 15/30)
+    private String graderName;
+    private String graderEmail;
 }

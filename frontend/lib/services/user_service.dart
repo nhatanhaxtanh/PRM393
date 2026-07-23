@@ -8,6 +8,7 @@ class UserProfile {
   final String fullName;
   final String role;
   final String campusName;
+  final String status;
 
   const UserProfile({
     required this.username,
@@ -15,6 +16,7 @@ class UserProfile {
     required this.fullName,
     required this.role,
     this.campusName = '',
+    this.status = 'ACTIVE',
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -23,6 +25,7 @@ class UserProfile {
     fullName: json['fullName'] ?? '',
     role: json['role'] ?? '',
     campusName: json['campusName'] ?? 'System / Global',
+    status: json['status'] ?? 'ACTIVE',
   );
 }
 

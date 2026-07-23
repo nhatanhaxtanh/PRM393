@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/user_service.dart';
 import '../../services/batch_service.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -224,6 +225,20 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ],
           ),
+          const SizedBox(height: 40),
+          Center(
+            child: TextButton.icon(
+              onPressed: () {
+                // Lệnh này ép ứng dụng sập ngay lập tức
+                FirebaseCrashlytics.instance.crash();
+              },
+              icon: const Icon(Icons.warning, color: Colors.red, size: 16),
+              label: const Text(
+                'Simulate App Crash (Demo)', 
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -259,4 +274,5 @@ class _ProfileTabState extends State<ProfileTab> {
       ],
     );
   }
+  
 }

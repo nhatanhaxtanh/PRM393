@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
 import '../../services/batch_service.dart';
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class HomeTab extends StatefulWidget {
   final ValueChanged<BatchInfo> onBatchSelected;
@@ -16,11 +19,34 @@ class _HomeTabState extends State<HomeTab> {
 
   List<BatchSummary> _batches = [];
   bool _loading = true;
+  StreamSubscription? _batchSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadBatches();
+    _listenForNewBatches();
+  }
+
+  void _listenForNewBatches() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+      _batchSubscription = FirebaseDatabase.instance
+          .ref('status/$key/batch_update')
+          .onValue
+          .listen((event) {
+            if (event.snapshot.value != null) {
+              _loadBatches();
+            }
+          });
+    }
+  }
+
+  @override
+  void dispose() {
+    _batchSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadBatches() async {
@@ -36,8 +62,9 @@ class _HomeTabState extends State<HomeTab> {
   int get _totalStudents => _batches.fold(0, (s, b) => s + b.totalStudents);
   int get _totalGraded => _batches.fold(0, (s, b) => s + b.gradedCount);
   int get _pending => _totalStudents - _totalGraded;
-  String get _progressLabel =>
-      _totalStudents == 0 ? '0%' : '${(_totalGraded / _totalStudents * 100).round()}%';
+  String get _progressLabel => _totalStudents == 0
+      ? '0%'
+      : '${(_totalGraded / _totalStudents * 100).round()}%';
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +77,11 @@ class _HomeTabState extends State<HomeTab> {
         children: [
           const Text(
             'Welcome back, Lecturer',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _navy),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: _navy,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -58,7 +89,7 @@ class _HomeTabState extends State<HomeTab> {
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 28),
-          
+
           if (isMobile)
             Column(
               children: [
@@ -149,7 +180,11 @@ class _HomeTabState extends State<HomeTab> {
         children: [
           const Text(
             'My Assigned PMG Batches',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: _navy,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -167,16 +202,22 @@ class _HomeTabState extends State<HomeTab> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 32),
               child: Center(
-                child: Text('No batches assigned', style: TextStyle(color: Colors.grey.shade500)),
+                child: Text(
+                  'No batches assigned',
+                  style: TextStyle(color: Colors.grey.shade500),
+                ),
               ),
             )
           else
-            ...List.generate(_batches.length, (i) => Column(
-              children: [
-                Divider(height: 1, color: Colors.grey.shade200),
-                _batchRow(_batches[i], isMobile),
-              ],
-            )),
+            ...List.generate(
+              _batches.length,
+              (i) => Column(
+                children: [
+                  Divider(height: 1, color: Colors.grey.shade200),
+                  _batchRow(_batches[i], isMobile),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -191,7 +232,14 @@ class _HomeTabState extends State<HomeTab> {
           Expanded(flex: 2, child: _headerCell('EXAM CODE')),
           Expanded(flex: 2, child: _headerCell('EXAM TYPE')),
           Expanded(flex: 2, child: _headerCell('PROGRESS')),
-          if (!isMobile) Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTION'))),
+          if (!isMobile)
+            Expanded(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: _headerCell('ACTION'),
+              ),
+            ),
         ],
       ),
     );
@@ -211,16 +259,18 @@ class _HomeTabState extends State<HomeTab> {
 
   Widget _batchRow(BatchSummary batch, bool isMobile) {
     return InkWell(
-      onTap: isMobile 
-          ? null 
-          : () => widget.onBatchSelected(BatchInfo(
-              batchId: batch.batchId,
-              campus: batch.campusCode,
-              examCode: batch.examCode,
-              examType: batch.examType,
-              completed: batch.gradedCount,
-              total: batch.totalStudents,
-            )),
+      onTap: isMobile
+          ? null
+          : () => widget.onBatchSelected(
+              BatchInfo(
+                batchId: batch.batchId,
+                campus: batch.campusCode,
+                examCode: batch.examCode,
+                examType: batch.examType,
+                completed: batch.gradedCount,
+                total: batch.totalStudents,
+              ),
+            ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
@@ -229,7 +279,11 @@ class _HomeTabState extends State<HomeTab> {
               flex: 2,
               child: Text(
                 batch.campusCode,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
               ),
             ),
             Expanded(
@@ -250,23 +304,30 @@ class _HomeTabState extends State<HomeTab> {
               flex: 2,
               child: Text(
                 '${batch.gradedCount}/${batch.totalStudents}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
               ),
             ),
             if (!isMobile)
               Expanded(
                 flex: 2,
                 child: Align(
-                  alignment: Alignment.centerRight, // Đẩy nút sang phải tạo khoảng cách thoáng
+                  alignment: Alignment
+                      .centerRight, // Đẩy nút sang phải tạo khoảng cách thoáng
                   child: ElevatedButton.icon(
-                    onPressed: () => widget.onBatchSelected(BatchInfo(
-                      batchId: batch.batchId,
-                      campus: batch.campusCode,
-                      examCode: batch.examCode,
-                      examType: batch.examType,
-                      completed: batch.gradedCount,
-                      total: batch.totalStudents,
-                    )),
+                    onPressed: () => widget.onBatchSelected(
+                      BatchInfo(
+                        batchId: batch.batchId,
+                        campus: batch.campusCode,
+                        examCode: batch.examCode,
+                        examType: batch.examType,
+                        completed: batch.gradedCount,
+                        total: batch.totalStudents,
+                      ),
+                    ),
                     icon: const Icon(Icons.arrow_forward, size: 16),
                     iconAlignment: IconAlignment.end,
                     label: const Text('Grade Batch'),
@@ -274,9 +335,17 @@ class _HomeTabState extends State<HomeTab> {
                       backgroundColor: _orange,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -348,7 +417,11 @@ class _StatCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   value,
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: valueColor),
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: valueColor,
+                  ),
                 ),
               ],
             ),
@@ -356,7 +429,10 @@ class _StatCard extends StatelessWidget {
           const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Icon(icon, color: iconColor, size: 24),
           ),
         ],

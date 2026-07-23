@@ -33,4 +33,7 @@ public class User {
 
     @Column(length = 20)
     private String role; // ADMIN, GRADER
+
+    @Column(length = 20)
+    private String status; // ACTIVE, DISABLED
 }

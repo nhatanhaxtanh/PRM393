@@ -32,7 +32,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   // Search & Filter State
   String _keyword = '';
   String _status = 'ALL';
-  
+
   // Remote Config State
   bool _isAIGradingEnabled = true; // Mặc định là bật
 
@@ -46,15 +46,17 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   // Khởi tạo và fetch dữ liệu từ Firebase Remote Config
   Future<void> _initRemoteConfig() async {
     final remoteConfig = FirebaseRemoteConfig.instance;
-    await remoteConfig.setConfigSettings(RemoteConfigSettings(
-      fetchTimeout: const Duration(minutes: 1),
-      minimumFetchInterval: const Duration(seconds: 0), // Lấy data ngay lập tức để test
-    ));
+    await remoteConfig.setConfigSettings(
+      RemoteConfigSettings(
+        fetchTimeout: const Duration(minutes: 1),
+        minimumFetchInterval: const Duration(
+          seconds: 0,
+        ), // Lấy data ngay lập tức để test
+      ),
+    );
 
     // Đặt giá trị dự phòng nếu không có mạng
-    await remoteConfig.setDefaults(const {
-      "enable_ai_grading": true,
-    });
+    await remoteConfig.setDefaults(const {"enable_ai_grading": true});
 
     try {
       await remoteConfig.fetchAndActivate();
@@ -110,18 +112,26 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     setState(() => _autoGradingAll = false);
 
     if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('AI grading completed: ${result['gradedCount']}/${result['totalSubmissions']} submissions graded'),
-        backgroundColor: const Color(0xFF4CAF50),
-        duration: const Duration(seconds: 3),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'AI grading completed: ${result['gradedCount']}/${result['totalSubmissions']} submissions graded',
+          ),
+          backgroundColor: const Color(0xFF4CAF50),
+          duration: const Duration(seconds: 3),
+        ),
+      );
       _loadSubmissions();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Failed to auto-grade all submissions. Please try again.'),
-        backgroundColor: Color(0xFFE53935),
-        duration: Duration(seconds: 3),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Failed to auto-grade all submissions. Please try again.',
+          ),
+          backgroundColor: Color(0xFFE53935),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -150,7 +160,10 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
         children: [
           Icon(Icons.arrow_back, size: 18, color: Colors.grey.shade600),
           const SizedBox(width: 6),
-          Text('Back to Dashboard', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+          Text(
+            'Back to Dashboard',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          ),
         ],
       ),
     );
@@ -178,11 +191,22 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('PMG Batch Details',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: _navy)),
+                    const Text(
+                      'PMG Batch Details',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: _navy,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('Project Management Practical Exam',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                    Text(
+                      'Project Management Practical Exam',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -194,9 +218,17 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _navy,
                   side: const BorderSide(color: _navy),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -212,11 +244,19 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Type: ', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                  Text(
+                    'Type: ',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: isFirst ? const Color(0xFFEEF2FF) : const Color(0xFFFFF8E1),
+                      color: isFirst
+                          ? const Color(0xFFEEF2FF)
+                          : const Color(0xFFFFF8E1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -224,7 +264,9 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: isFirst ? const Color(0xFF4F6FD9) : const Color(0xFFF59E0B),
+                        color: isFirst
+                            ? const Color(0xFF4F6FD9)
+                            : const Color(0xFFF59E0B),
                       ),
                     ),
                   ),
@@ -234,10 +276,17 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Progress: ', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                  Text(
+                    'Progress: ',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
                   Text(
                     '${widget.batch.completed}/${widget.batch.total}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _orange),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _orange,
+                    ),
                   ),
                 ],
               ),
@@ -252,14 +301,19 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+        Text(
+          label,
+          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+        ),
         const SizedBox(width: 4),
-        Text(value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isLink ? _navy : Colors.black87,
-            )),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isLink ? _navy : Colors.black87,
+          ),
+        ),
       ],
     );
   }
@@ -282,11 +336,19 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Student Submissions',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy)),
+                  const Text(
+                    'Student Submissions',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _navy,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('All documents have been automatically fetched from the secure server',
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                  Text(
+                    'All documents have been automatically fetched from the secure server',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                  ),
                 ],
               ),
               // Nút AI chỉ hiển thị nếu _isAIGradingEnabled = true trên Remote Config
@@ -294,17 +356,36 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                 ElevatedButton.icon(
                   onPressed: _autoGradingAll ? null : _autoGradeAll,
                   icon: _autoGradingAll
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.auto_awesome, size: 16),
-                  label: Text(_autoGradingAll ? 'AI Grading All...' : 'Auto-grade All with AI'),
+                  label: Text(
+                    _autoGradingAll
+                        ? 'AI Grading All...'
+                        : 'Auto-grade All with AI',
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _navy,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: _navy.withAlpha(150),
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
             ],
@@ -322,17 +403,22 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 32),
               child: Center(
-                child: Text('No submissions found',
-                    style: TextStyle(color: Colors.grey.shade500)),
+                child: Text(
+                  'No submissions found',
+                  style: TextStyle(color: Colors.grey.shade500),
+                ),
               ),
             )
           else
-            ...List.generate(_submissions.length, (i) => Column(
-              children: [
-                Divider(height: 1, color: Colors.grey.shade200),
-                _submissionRow(_submissions[i]),
-              ],
-            )),
+            ...List.generate(
+              _submissions.length,
+              (i) => Column(
+                children: [
+                  Divider(height: 1, color: Colors.grey.shade200),
+                  _submissionRow(_submissions[i]),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -349,10 +435,14 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               prefixIcon: const Icon(Icons.search, size: 20, color: _navy),
               filled: true,
               fillColor: const Color(0xFFF5F6FA),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 0,
+              ),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none),
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
             ),
             onSubmitted: _onSearch,
           ),
@@ -370,11 +460,18 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                 value: _status,
                 isExpanded: true,
                 icon: const Icon(Icons.filter_list, size: 20, color: _navy),
-                style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
                 items: const [
                   DropdownMenuItem(value: 'ALL', child: Text('All Status')),
                   DropdownMenuItem(value: 'GRADED', child: Text('Graded')),
-                  DropdownMenuItem(value: 'NOT_GRADED', child: Text('Not Graded')),
+                  DropdownMenuItem(
+                    value: 'NOT_GRADED',
+                    child: Text('Not Graded'),
+                  ),
                   DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
                 ],
                 onChanged: (val) {
@@ -392,6 +489,8 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   }
 
   Widget _tableHeader() {
+    final isMobile = MediaQuery.of(context).size.width < 850;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -400,34 +499,51 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
           Expanded(child: _headerCell('FULL NAME')),
           Expanded(child: _headerCell('SUBMISSION TIME')),
           Expanded(flex: 2, child: _headerCell('STATUS')),
-          Expanded(child: _headerCell('ACTION')),
+          if (!isMobile) Expanded(child: _headerCell('ACTION')),
         ],
       ),
     );
   }
 
-  Widget _headerCell(String text) => Text(text,
-      style: TextStyle(
-          fontSize: 11, fontWeight: FontWeight.w700,
-          color: Colors.grey.shade500, letterSpacing: 0.5));
+  Widget _headerCell(String text) => Text(
+    text,
+    style: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: Colors.grey.shade500,
+      letterSpacing: 0.5,
+    ),
+  );
 
   Widget _submissionRow(StudentSubmission s) {
+    final isMobile = MediaQuery.of(context).size.width < 850;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
           Expanded(
-            child: Text(s.studentId,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: _navy)),
+            child: Text(
+              s.studentId,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: _navy,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(s.fullName,
-                style: const TextStyle(fontSize: 14, color: Colors.black87),
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              s.fullName,
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           Expanded(
-            child: Text(s.submissionTime,
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+            child: Text(
+              s.submissionTime,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            ),
           ),
           Expanded(
             flex: 2,
@@ -446,20 +562,35 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                     _notGradedBadge(),
                   if (s.isAIGraded)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFE3F2FD),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2196F3), width: 1),
+                        border: Border.all(
+                          color: const Color(0xFF2196F3),
+                          width: 1,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.auto_awesome, size: 12, color: Color(0xFF2196F3)),
+                          const Icon(
+                            Icons.auto_awesome,
+                            size: 12,
+                            color: Color(0xFF2196F3),
+                          ),
                           const SizedBox(width: 4),
-                          const Text('AI',
-                              style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF2196F3))),
+                          const Text(
+                            'AI',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2196F3),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -467,52 +598,77 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
               ),
             ),
           ),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ElevatedButton(
-                onPressed: () => widget.onReviewSelected(ReviewInfo(
-                  submissionId: s.submissionId,
-                  batchId: widget.batch.batchId,
-                  studentId: s.studentId,
-                  studentName: s.fullName,
-                  examCode: widget.batch.examCode,
-                  campus: widget.batch.campus,
-                )),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _orange,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          if (!isMobile)
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ElevatedButton(
+                  onPressed: () => widget.onReviewSelected(
+                    ReviewInfo(
+                      submissionId: s.submissionId,
+                      batchId: widget.batch.batchId,
+                      studentId: s.studentId,
+                      studentName: s.fullName,
+                      examCode: widget.batch.examCode,
+                      campus: widget.batch.campus,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _orange,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: const Text('Review Document'),
                 ),
-                child: const Text('Review Document'),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
   Widget _notGradedBadge() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-            color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(20)),
-        child: const Text('Not Graded',
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFE53935))),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFEBEE),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: const Text(
+      'Not Graded',
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFFE53935),
+      ),
+    ),
+  );
 
   Widget _draftBadge() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-            color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(20)),
-        child: const Text('Draft',
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFF57C00))),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF3E0),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: const Text(
+      'Draft',
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFFF57C00),
+      ),
+    ),
+  );
 
   Widget _gradedBadge(double score) {
     final label = score == score.truncateToDouble()
@@ -521,15 +677,26 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-          color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20)),
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.description_outlined, size: 14, color: Color(0xFF4CAF50)),
+          const Icon(
+            Icons.description_outlined,
+            size: 14,
+            color: Color(0xFF4CAF50),
+          ),
           const SizedBox(width: 4),
-          Text('Graded (Score: $label)',
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF4CAF50))),
+          Text(
+            'Graded (Score: $label)',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF4CAF50),
+            ),
+          ),
         ],
       ),
     );

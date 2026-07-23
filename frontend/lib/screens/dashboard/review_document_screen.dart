@@ -12,6 +12,7 @@ import '../../services/batch_service.dart';
 class ReviewDocumentScreen extends StatefulWidget {
   final ReviewInfo review;
   final VoidCallback onBack;
+
   const ReviewDocumentScreen({super.key, required this.review, required this.onBack});
 
   @override
@@ -25,12 +26,11 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   int _activeTab = 0;
   String? _documentText;
   bool _loadingDoc = true;
-  
   bool _loadingExamPaper = true;
   bool _submitting = false;
   bool _autoGrading = false;
   bool _usedAI = false;
-  
+
   String? _pdfError;
   Uint8List? _pdfBytes;
 
@@ -49,9 +49,9 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     super.initState();
     _scores = List.generate(_rubricItems.length, (_) => TextEditingController(text: '0'));
     _comments = List.generate(_rubricItems.length, (_) => TextEditingController());
-    for (final c in _scores) {
-      c.addListener(() => setState(() {}));
-    }
+    
+    // Đã xóa vòng lặp gọi setState() gây lag UI ở đây
+    
     _loadDocument();
     _loadExamPaper();
   }
@@ -67,7 +67,6 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       if (mounted) setState(() { _loadingExamPaper = false; _pdfError = 'Không tìm thấy URL đề thi.'; });
       return;
     }
-
     try {
       final response = await http.get(Uri.parse(info.examPaperUrl));
       if (response.statusCode == 200) {
@@ -79,18 +78,15 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
           });
           return;
         }
-
-        // Kiểm tra xem Backend có trả về đúng file PDF không (File PDF luôn bắt đầu bằng %PDF-)
         final header = String.fromCharCodes(bytes.sublist(0, 5));
         if (header != '%PDF-') {
           String preview = String.fromCharCodes(bytes.take(50).toList()).replaceAll('\n', ' ');
           if (mounted) setState(() {
-            _pdfError = 'Backend đang không trả về PDF!\nNội dung nhận được: "$preview..."\n\n=> CÁCH FIX: Tắt Spring Boot, bấm "Clean and Build" (Reload Maven) rồi chạy lại để Server nhận file mock-exam.pdf.';
+            _pdfError = 'Backend đang không trả về PDF!\nNội dung nhận được: "$preview..."\n\n=> CÁCH FIX: Tắt Spring Boot, bấm "Clean and Build" (Reload Maven) rồi chạy lại Server để nhận diện file mock-exam.pdf.';
             _loadingExamPaper = false;
           });
           return;
         }
-
         if (mounted) setState(() {
           _pdfBytes = bytes;
           _loadingExamPaper = false;
@@ -153,6 +149,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       ));
       return;
     }
+
     setState(() => _submitting = true);
     final ok = await SubmissionService.saveGrades(
       widget.review.submissionId,
@@ -166,7 +163,6 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       if (!isDraft) {
         widget.onBack();
         
-        // 1. Ghi Analytics
         FirebaseAnalytics.instance.logEvent(
           name: 'grade_submission_success',
           parameters: {
@@ -175,7 +171,6 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
           },
         );
 
-        // 2. GHI LOG LÊN FIRESTORE (Tính năng mới)
         try {
           await FirebaseFirestore.instance.collection('grading_logs').add({
             'studentId': widget.review.studentId,
@@ -226,6 +221,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   }
 
   double get _totalScore => _scores.fold(0.0, (sum, c) => sum + (double.tryParse(c.text) ?? 0.0));
+
   String get _totalScoreLabel {
     final rounded = (_totalScore * 10).round() / 10;
     return rounded == rounded.truncateToDouble() ? rounded.toInt().toString() : rounded.toStringAsFixed(1);
@@ -409,7 +405,6 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     
-    // Giao diện khi xảy ra lỗi tải PDF hoặc Parse PDF
     if (_pdfError != null) {
       return Center(
         child: Padding(
@@ -419,7 +414,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
             children: [
               const Icon(Icons.error_outline, color: Colors.red, size: 48),
               const SizedBox(height: 16),
-              const Text('LỖI ĐỌC ĐỀ THI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+              const Text('LỖI TẢI ĐỀ THI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
               const SizedBox(height: 8),
               Text(_pdfError!, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700, height: 1.5)),
               const SizedBox(height: 24),
@@ -434,7 +429,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                   }
                 },
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Mở Đề thi ở Browser (Phương án dự phòng)'),
+                label: const Text('Mở Đề thi bằng Browser (Phòng hờ)'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _navy,
                   foregroundColor: Colors.white,
@@ -450,12 +445,11 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     if (_pdfBytes == null) {
       return Center(child: Text('Empty PDF data', style: TextStyle(color: Colors.grey.shade500)));
     }
-
-    // Load PDF trực tiếp từ mảng Byte
+    
     return SfPdfViewer.memory(
       _pdfBytes!,
       onDocumentLoadFailed: (PdfDocumentLoadFailedDetails details) {
-        setState(() => _pdfError = 'Lỗi Syncfusion PDF Viewer:\n${details.description}\n\n*Nếu chạy trên Web, hãy đảm bảo đã thêm pdf.js vào web/index.html*');
+        setState(() => _pdfError = 'Lỗi Syncfusion PDF Viewer:\n${details.description}\n\n*Nếu chạy trên Web, hãy thêm pdf.js vào web/index.html*');
       },
     );
   }
@@ -496,8 +490,15 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Total Score:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                      Text('$_totalScoreLabel / 100',
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _navy)),
+                      
+                      // CÁCH FIX CHUẨN: Dùng AnimatedBuilder để chỉ rebuild mỗi chỗ text tổng điểm khi gõ, không làm load lại file PDF.
+                      AnimatedBuilder(
+                        animation: Listenable.merge(_scores),
+                        builder: (context, child) {
+                          return Text('$_totalScoreLabel / 100',
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _navy));
+                        }
+                      ),
                     ],
                   ),
                 ),

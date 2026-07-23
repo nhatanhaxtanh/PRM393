@@ -10,4 +10,5 @@ public class UserProfileDTO {
     private String fullName;
     private String role;
     private String campusName;
+    private String status;
 }
