@@ -47,7 +47,7 @@ class AuthService {
           return LoginResult.failure(body['message'] ?? 'Login failed');
         }
       } else {
-        return LoginResult.failure('Lỗi xác thực hệ thống nội bộ');
+        return LoginResult.failure('Network error occurred.');
       }
     } catch (_) {
       return LoginResult.failure('Cannot connect to server');

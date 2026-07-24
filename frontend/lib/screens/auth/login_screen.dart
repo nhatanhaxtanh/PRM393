@@ -76,14 +76,14 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _loading = false;
         if (e.code == 'user-disabled') {
-          _error = 'Tài khoản bị khóa. Vui lòng liên hệ Admin.';
+          _error = 'Account disabled. Please contact Admin.';
         } else if (e.code == 'user-not-found' || e.code == 'invalid-email') {
-          _error = 'Email không tồn tại trong hệ thống.';
+          _error = 'Email not found.';
         } else if (e.code == 'wrong-password' ||
             e.code == 'invalid-credential') {
-          _error = 'Sai mật khẩu, vui lòng thử lại.';
+          _error = 'Incorrect password. Please try again';
         } else {
-          _error = 'Lỗi đăng nhập: ${e.message}';
+          _error = 'Login error: ${e.message}';
         }
       });
       FirebaseCrashlytics.instance.log('Firebase Auth Error: ${e.code}');
@@ -91,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Đã xảy ra lỗi không xác định.';
+        _error = 'An unknown error occurred.';
       });
     }
   }

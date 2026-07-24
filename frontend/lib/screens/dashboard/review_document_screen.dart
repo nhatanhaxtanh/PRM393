@@ -13,7 +13,11 @@ class ReviewDocumentScreen extends StatefulWidget {
   final ReviewInfo review;
   final VoidCallback onBack;
 
-  const ReviewDocumentScreen({super.key, required this.review, required this.onBack});
+  const ReviewDocumentScreen({
+    super.key,
+    required this.review,
+    required this.onBack,
+  });
 
   @override
   State<ReviewDocumentScreen> createState() => _ReviewDocumentScreenState();
@@ -47,24 +51,40 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
   @override
   void initState() {
     super.initState();
-    _scores = List.generate(_rubricItems.length, (_) => TextEditingController(text: '0'));
-    _comments = List.generate(_rubricItems.length, (_) => TextEditingController());
-    
+    _scores = List.generate(
+      _rubricItems.length,
+      (_) => TextEditingController(text: '0'),
+    );
+    _comments = List.generate(
+      _rubricItems.length,
+      (_) => TextEditingController(),
+    );
+
     // Đã xóa vòng lặp gọi setState() gây lag UI ở đây
-    
+
     _loadDocument();
     _loadExamPaper();
   }
 
   Future<void> _loadDocument() async {
-    final text = await SubmissionService.getDocument(widget.review.submissionId);
-    if (mounted) setState(() { _documentText = text; _loadingDoc = false; });
+    final text = await SubmissionService.getDocument(
+      widget.review.submissionId,
+    );
+    if (mounted)
+      setState(() {
+        _documentText = text;
+        _loadingDoc = false;
+      });
   }
 
   Future<void> _loadExamPaper() async {
     final info = await BatchService.getExamPaper(widget.review.batchId);
     if (info == null || info.examPaperUrl.isEmpty) {
-      if (mounted) setState(() { _loadingExamPaper = false; _pdfError = 'Không tìm thấy URL đề thi.'; });
+      if (mounted)
+        setState(() {
+          _loadingExamPaper = false;
+          _pdfError = 'Exam paper URL not found.';
+        });
       return;
     }
     try {
@@ -72,81 +92,100 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
         if (bytes.length < 5) {
-          if (mounted) setState(() {
-            _pdfError = 'Backend trả về file rỗng (0 bytes).';
-            _loadingExamPaper = false;
-          });
+          if (mounted)
+            setState(() {
+              _pdfError = 'Backend returned empty file (0 bytes).';
+              _loadingExamPaper = false;
+            });
           return;
         }
         final header = String.fromCharCodes(bytes.sublist(0, 5));
         if (header != '%PDF-') {
-          String preview = String.fromCharCodes(bytes.take(50).toList()).replaceAll('\n', ' ');
-          if (mounted) setState(() {
-            _pdfError = 'Backend đang không trả về PDF!\nNội dung nhận được: "$preview..."\n\n=> CÁCH FIX: Tắt Spring Boot, bấm "Clean and Build" (Reload Maven) rồi chạy lại Server để nhận diện file mock-exam.pdf.';
-            _loadingExamPaper = false;
-          });
+          String preview = String.fromCharCodes(
+            bytes.take(50).toList(),
+          ).replaceAll('\n', ' ');
+          if (mounted)
+            setState(() {
+              _pdfError =
+                  'Backend did not return a valid PDF!\nContent preview: "$preview..."\n\n=> FIX: Restart Spring Boot, run "Clean and Build", and ensure mock-exam.pdf is present.';
+              _loadingExamPaper = false;
+            });
           return;
         }
-        if (mounted) setState(() {
-          _pdfBytes = bytes;
-          _loadingExamPaper = false;
-        });
+        if (mounted)
+          setState(() {
+            _pdfBytes = bytes;
+            _loadingExamPaper = false;
+          });
       } else {
-        if (mounted) setState(() {
-          _pdfError = 'Lỗi tải PDF (Status: ${response.statusCode})';
-          _loadingExamPaper = false;
-        });
+        if (mounted)
+          setState(() {
+            _pdfError = 'PDF Download Error (Status: ${response.statusCode})';
+            _loadingExamPaper = false;
+          });
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _pdfError = 'Lỗi mạng (CORS hoặc sai URL): $e';
-        _loadingExamPaper = false;
-      });
+      if (mounted)
+        setState(() {
+          _pdfError = 'Network Error (CORS or invalid URL): $e';
+          _loadingExamPaper = false;
+        });
     }
   }
 
   Future<void> _autoGrade() async {
     setState(() => _autoGrading = true);
-    final aiGrades = await SubmissionService.autoGrade(widget.review.submissionId);
+    final aiGrades = await SubmissionService.autoGrade(
+      widget.review.submissionId,
+    );
     if (!mounted) return;
     setState(() => _autoGrading = false);
-    
+
     if (aiGrades != null) {
       _usedAI = true;
       for (int i = 0; i < aiGrades.length && i < _scores.length; i++) {
         _scores[i].text = aiGrades[i].awardedScore.toStringAsFixed(1);
         _comments[i].text = aiGrades[i].comments;
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('AI grading completed successfully'),
-        backgroundColor: Color(0xFF4CAF50),
-        duration: Duration(seconds: 2),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('AI grading completed successfully'),
+          backgroundColor: Color(0xFF4CAF50),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Failed to get AI grading. Please try again.'),
-        backgroundColor: Color(0xFFE53935),
-        duration: Duration(seconds: 3),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to get AI grading. Please try again.'),
+          backgroundColor: Color(0xFFE53935),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
   List<GradeItem> _buildGradeItems() {
-    return List.generate(_rubricItems.length, (i) => GradeItem(
-      requestNo: i + 1,
-      awardedScore: double.tryParse(_scores[i].text) ?? 0,
-      comments: _comments[i].text.trim(),
-    ));
+    return List.generate(
+      _rubricItems.length,
+      (i) => GradeItem(
+        requestNo: i + 1,
+        awardedScore: double.tryParse(_scores[i].text) ?? 0,
+        comments: _comments[i].text.trim(),
+      ),
+    );
   }
 
   Future<void> _submit({bool isDraft = false}) async {
     final validationError = _validateScores();
     if (validationError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(validationError),
-        backgroundColor: const Color(0xFFE53935),
-        duration: const Duration(seconds: 3),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(validationError),
+          backgroundColor: const Color(0xFFE53935),
+          duration: const Duration(seconds: 3),
+        ),
+      );
       return;
     }
 
@@ -158,11 +197,11 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     );
     if (!mounted) return;
     setState(() => _submitting = false);
-    
+
     if (ok) {
       if (!isDraft) {
         widget.onBack();
-        
+
         FirebaseAnalytics.instance.logEvent(
           name: 'grade_submission_success',
           parameters: {
@@ -176,7 +215,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
             'studentId': widget.review.studentId,
             'studentName': widget.review.studentName,
             'score': _totalScore,
-            'method': _usedAI ? 'AI' : 'Manual', 
+            'method': _usedAI ? 'AI' : 'Manual',
             'examCode': widget.review.examCode,
             'timestamp': FieldValue.serverTimestamp(),
           });
@@ -184,18 +223,26 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
           debugPrint('Lỗi ghi Firestore: $e');
         }
       }
-      
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(isDraft ? 'Draft saved' : 'Grades submitted successfully'),
-        backgroundColor: isDraft ? const Color(0xFF1B2D8B) : const Color(0xFF4CAF50),
-        duration: const Duration(seconds: 2),
-      ));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isDraft ? 'Draft saved' : 'Grades submitted successfully',
+          ),
+          backgroundColor: isDraft
+              ? const Color(0xFF1B2D8B)
+              : const Color(0xFF4CAF50),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Failed to save grades. Please try again.'),
-        backgroundColor: Color(0xFFE53935),
-        duration: Duration(seconds: 3),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to save grades. Please try again.'),
+          backgroundColor: Color(0xFFE53935),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -220,11 +267,14 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     super.dispose();
   }
 
-  double get _totalScore => _scores.fold(0.0, (sum, c) => sum + (double.tryParse(c.text) ?? 0.0));
+  double get _totalScore =>
+      _scores.fold(0.0, (sum, c) => sum + (double.tryParse(c.text) ?? 0.0));
 
   String get _totalScoreLabel {
     final rounded = (_totalScore * 10).round() / 10;
-    return rounded == rounded.truncateToDouble() ? rounded.toInt().toString() : rounded.toStringAsFixed(1);
+    return rounded == rounded.truncateToDouble()
+        ? rounded.toInt().toString()
+        : rounded.toStringAsFixed(1);
   }
 
   @override
@@ -261,7 +311,10 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
               children: [
                 Icon(Icons.arrow_back, size: 18, color: Colors.grey.shade600),
                 const SizedBox(width: 6),
-                Text('Back to Batch', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
+                Text(
+                  'Back to Batch',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                ),
               ],
             ),
           ),
@@ -271,7 +324,11 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
               children: [
                 Text(
                   'Student: ${widget.review.studentId} - ${widget.review.studentName}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _navy),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _navy,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -284,11 +341,18 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
           Row(
             children: [
               Container(
-                width: 8, height: 8,
-                decoration: const BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle),
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF4CAF50),
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 6),
-              Text('Auto-save active', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+              Text(
+                'Auto-save active',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+              ),
             ],
           ),
         ],
@@ -312,11 +376,17 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
               if (_activeTab == 0) ...[
                 Icon(Icons.zoom_out, size: 18, color: Colors.grey.shade500),
                 const SizedBox(width: 8),
-                Text('100%', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                Text(
+                  '100%',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
                 const SizedBox(width: 8),
                 Icon(Icons.zoom_in, size: 18, color: Colors.grey.shade500),
                 const SizedBox(width: 20),
-                Text('Page 1 of 4', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                Text(
+                  'Page 1 of 4',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                ),
               ],
             ],
           ),
@@ -345,7 +415,9 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: active ? Colors.white : Colors.transparent,
-          border: Border.all(color: active ? Colors.grey.shade300 : Colors.transparent),
+          border: Border.all(
+            color: active ? Colors.grey.shade300 : Colors.transparent,
+          ),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
@@ -371,29 +443,45 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Student: ${widget.review.studentId} - ${widget.review.studentName}',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _navy)),
+          Text(
+            'Student: ${widget.review.studentId} - ${widget.review.studentName}',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: _navy,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('Exam Code: ${widget.review.examCode}',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+          Text(
+            'Exam Code: ${widget.review.examCode}',
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
           const Divider(height: 32),
           if (_loadingDoc)
-            const Center(child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: CircularProgressIndicator(),
-            ))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: CircularProgressIndicator(),
+              ),
+            )
           else if (_documentText == null)
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Text('Failed to load document',
-                    style: TextStyle(color: Colors.grey.shade500)),
+                child: Text(
+                  'Failed to load document',
+                  style: TextStyle(color: Colors.grey.shade500),
+                ),
               ),
             )
           else
             SelectableText(
               _documentText!,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade800, height: 1.7),
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade800,
+                height: 1.7,
+              ),
             ),
         ],
       ),
@@ -404,7 +492,7 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
     if (_loadingExamPaper) {
       return const Center(child: CircularProgressIndicator());
     }
-    
+
     if (_pdfError != null) {
       return Center(
         child: Padding(
@@ -414,13 +502,26 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
             children: [
               const Icon(Icons.error_outline, color: Colors.red, size: 48),
               const SizedBox(height: 16),
-              const Text('LỖI TẢI ĐỀ THI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+              const Text(
+                'EXAM PAPER ERROR',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(_pdfError!, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700, height: 1.5)),
+              Text(
+                _pdfError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade700, height: 1.5),
+              ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () async {
-                  final info = await BatchService.getExamPaper(widget.review.batchId);
+                  final info = await BatchService.getExamPaper(
+                    widget.review.batchId,
+                  );
                   if (info != null && info.examPaperUrl.isNotEmpty) {
                     final uri = Uri.parse(info.examPaperUrl);
                     if (await canLaunchUrl(uri)) {
@@ -429,11 +530,14 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                   }
                 },
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Mở Đề thi bằng Browser (Phòng hờ)'),
+                label: const Text('Open Exam Paper in Browser'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _navy,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ],
@@ -441,15 +545,23 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
         ),
       );
     }
-    
+
     if (_pdfBytes == null) {
-      return Center(child: Text('Empty PDF data', style: TextStyle(color: Colors.grey.shade500)));
+      return Center(
+        child: Text(
+          'Empty PDF data',
+          style: TextStyle(color: Colors.grey.shade500),
+        ),
+      );
     }
-    
+
     return SfPdfViewer.memory(
       _pdfBytes!,
       onDocumentLoadFailed: (PdfDocumentLoadFailedDetails details) {
-        setState(() => _pdfError = 'Lỗi Syncfusion PDF Viewer:\n${details.description}\n\n*Nếu chạy trên Web, hãy thêm pdf.js vào web/index.html*');
+        setState(
+          () => _pdfError =
+              'Syncfusion PDF Viewer Error:\n${details.description}\n\n*If running on Web, please add pdf.js to web/index.html*',
+        );
       },
     );
   }
@@ -462,15 +574,24 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
         children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Text('Grading Rubric',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _navy)),
+            child: Text(
+              'Grading Rubric',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: _navy,
+              ),
+            ),
           ),
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
-                children: List.generate(_rubricItems.length, (i) => _rubricCard(i)),
+                children: List.generate(
+                  _rubricItems.length,
+                  (i) => _rubricCard(i),
+                ),
               ),
             ),
           ),
@@ -481,7 +602,10 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
               children: [
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: _navy),
                     borderRadius: BorderRadius.circular(8),
@@ -489,15 +613,27 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Score:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                      
+                      const Text(
+                        'Total Score:',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+
                       // CÁCH FIX CHUẨN: Dùng AnimatedBuilder để chỉ rebuild mỗi chỗ text tổng điểm khi gõ, không làm load lại file PDF.
                       AnimatedBuilder(
                         animation: Listenable.merge(_scores),
                         builder: (context, child) {
-                          return Text('$_totalScoreLabel / 100',
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _navy));
-                        }
+                          return Text(
+                            '$_totalScoreLabel / 100',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: _navy,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -506,25 +642,46 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                 ElevatedButton.icon(
                   onPressed: _autoGrading ? null : _autoGrade,
                   icon: _autoGrading
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.auto_awesome, size: 16),
                   iconAlignment: IconAlignment.start,
-                  label: Text(_autoGrading ? 'AI Grading...' : 'Auto-grade with AI'),
+                  label: Text(
+                    _autoGrading ? 'AI Grading...' : 'Auto-grade with AI',
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _navy,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: _navy.withAlpha(150),
                     elevation: 0,
                     minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
                   onPressed: _submitting ? null : () => _submit(),
                   icon: _submitting
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.arrow_forward, size: 16),
                   iconAlignment: IconAlignment.end,
                   label: const Text('Submit & Next Student'),
@@ -534,8 +691,13 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                     disabledBackgroundColor: _orange.withAlpha(150),
                     elevation: 0,
                     minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -547,8 +709,13 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                     foregroundColor: _navy,
                     side: const BorderSide(color: _navy),
                     minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -571,7 +738,14 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(item.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _navy)),
+          Text(
+            item.title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _navy,
+            ),
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -582,8 +756,13 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
                   decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
                       borderSide: BorderSide(color: Colors.grey.shade300),
@@ -593,11 +772,17 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
                       borderSide: const BorderSide(color: _navy),
                     ),
                   ),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
-              Text('/ ${item.maxScore}', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+              Text(
+                '/ ${item.maxScore}',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -608,7 +793,9 @@ class _ReviewDocumentScreenState extends State<ReviewDocumentScreen> {
               hintText: 'Lecturer comments...',
               hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
               contentPadding: const EdgeInsets.all(10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
                 borderSide: BorderSide(color: Colors.grey.shade300),

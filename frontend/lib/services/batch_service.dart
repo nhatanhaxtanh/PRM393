@@ -42,8 +42,8 @@ class BatchSummary {
     examType: json['examType'] ?? '',
     totalStudents: json['totalStudents'] as int? ?? 0,
     gradedCount: json['gradedCount'] as int? ?? 0,
-    graderName: json['graderName'] ?? 'Nguyễn Giảng Viên',
-    graderEmail: json['graderEmail'] ?? 'gv1234@fpt.edu.vn',
+    graderName: json['graderName'] ?? '',
+    graderEmail: json['graderEmail'] ?? '',
   );
 }
 

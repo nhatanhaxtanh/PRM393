@@ -16,7 +16,6 @@ import '../../services/app_session.dart';
 import '../auth/login_screen.dart';
 import '../../services/batch_service.dart';
 
-
 class BatchInfo {
   final int batchId;
   final String campus;
@@ -67,6 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   UserProfile? _profile;
   StreamSubscription? _disableSubscription;
   StreamSubscription? _remindSubscription;
+  StreamSubscription? _batchUpdateSubscription;
 
   @override
   void initState() {
@@ -75,6 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadProfile();
     _listenForAccountDisable();
     _listenForReminders();
+    _listenForBatchUpdates();
   }
 
   void _listenForAccountDisable() {
@@ -102,11 +103,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.block, color: Colors.red),
             SizedBox(width: 8),
-            Text('Tài khoản bị khóa', style: TextStyle(color: Colors.red)),
+            Text('Account Disabled', style: TextStyle(color: Colors.red)),
           ],
         ),
         content: const Text(
-          'Quản trị viên đã vô hiệu hóa tài khoản của bạn.\nBạn không thể tiếp tục sử dụng hệ thống. Vui lòng liên hệ Admin.',
+          'Your account has been disabled by the administrator.\nYou cannot continue using the system. Please contact support.',
         ),
         actions: [
           ElevatedButton(
@@ -139,7 +140,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Đăng xuất'),
+            child: const Text('Logout'),
           ),
         ],
       ),
@@ -154,21 +155,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .ref('status/$key/remind_time')
           .onValue
           .listen((event) {
-        if (event.snapshot.value != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.notifications_active, color: Colors.white),
-                  SizedBox(width: 8),
-                  Expanded(child: Text('🔔 QUẢN TRỊ VIÊN: Bạn có lô bài cần chấm gấp!')),
+            if (event.snapshot.value != null && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.notifications_active, color: Colors.white),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '🔔 ADMIN ALERT: You have an urgent batch to grade!',
+                        ),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: Colors.blue,
+                  duration: Duration(seconds: 5),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          });
+    }
+  }
+
+  void _listenForBatchUpdates() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+      _batchUpdateSubscription = FirebaseDatabase.instance
+          .ref('status/$key/force_update')
+          .onValue
+          .listen((event) async {
+        if (event.snapshot.value != null && _selectedBatch != null) {
+          final batches = await BatchService.getAssignedBatches();
+          final stillExists =
+              batches.any((b) => b.batchId == _selectedBatch!.batchId);
+
+          if (!stillExists && mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('System Alert'),
+                  ],
+                ),
+                content: const Text(
+                    'The current batch has been reassigned or cancelled by the admin.\nPlease return to dashboard.'),
+                actions: [
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      setState(() {
+                        _selectedBatch = null;
+                        _selectedReview = null;
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF97316),
+                        foregroundColor: Colors.white),
+                    child: const Text('Acknowledge'),
+                  ),
                 ],
               ),
-              backgroundColor: Colors.blue,
-              duration: Duration(seconds: 5),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+            );
+          }
         }
       });
     }
@@ -179,6 +234,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _disableSubscription?.cancel();
     _remindSubscription?.cancel();
+    _batchUpdateSubscription?.cancel();
     super.dispose();
   }
 
@@ -265,13 +321,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (isMobile) {
       final navItems = isAdmin
           ? const [
-              BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
-              BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.admin_panel_settings),
+                label: 'Admin',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person),
+                label: 'Profile',
+              ),
             ]
           : const [
-              BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Home'),
-              BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-              BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.history),
+                label: 'History',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person),
+                label: 'Profile',
+              ),
             ];
 
       int getIndex() {
@@ -290,14 +361,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           backgroundColor: const Color(0xFF1B2D8B),
           title: const Text(
             'PE Grading System',
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           elevation: 0,
           actions: [
             IconButton(
               icon: const Icon(Icons.logout, color: Colors.white),
               onPressed: _logout, // Nút Logout trên góc phải
-            )
+            ),
           ],
         ),
         body: _body,
@@ -312,11 +387,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _selectedBatch = null;
               _selectedReview = null;
               if (isAdmin) {
-                _selected = index == 0 ? SidebarItem.admin : SidebarItem.profile;
+                _selected = index == 0
+                    ? SidebarItem.admin
+                    : SidebarItem.profile;
               } else {
-                if (index == 0) _selected = SidebarItem.dashboard;
-                else if (index == 1) _selected = SidebarItem.gradingHistory;
-                else _selected = SidebarItem.profile;
+                if (index == 0)
+                  _selected = SidebarItem.dashboard;
+                else if (index == 1)
+                  _selected = SidebarItem.gradingHistory;
+                else
+                  _selected = SidebarItem.profile;
               }
             });
           },
