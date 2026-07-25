@@ -128,3 +128,5 @@ Hiện tại ứng dụng là **frontend scaffold** với dữ liệu mock. Các
 ## Tác giả
 
 **nhatanhaxtanh** — lenhatanh2411@gmail.com
+
+TEST CodeRabbit 
