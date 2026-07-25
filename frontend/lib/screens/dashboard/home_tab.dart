@@ -20,6 +20,7 @@ class _HomeTabState extends State<HomeTab> {
   List<BatchSummary> _batches = [];
   bool _loading = true;
   StreamSubscription? _batchSubscription;
+  StreamSubscription? _forceUpdateSubscription;
 
   @override
   void initState() {
@@ -32,13 +33,21 @@ class _HomeTabState extends State<HomeTab> {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && user.email != null) {
       final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+      
+      // Lắng nghe có lô bài mới
       _batchSubscription = FirebaseDatabase.instance
           .ref('status/$key/batch_update')
           .onValue
           .listen((event) {
-            if (event.snapshot.value != null) {
-              _loadBatches();
-            }
+            if (event.snapshot.value != null) _loadBatches();
+          });
+
+      // Lắng nghe khi bị thu hồi/xóa lô bài
+      _forceUpdateSubscription = FirebaseDatabase.instance
+          .ref('status/$key/force_update')
+          .onValue
+          .listen((event) {
+            if (event.snapshot.value != null) _loadBatches();
           });
     }
   }
@@ -46,6 +55,7 @@ class _HomeTabState extends State<HomeTab> {
   @override
   void dispose() {
     _batchSubscription?.cancel();
+    _forceUpdateSubscription?.cancel();
     super.dispose();
   }
 

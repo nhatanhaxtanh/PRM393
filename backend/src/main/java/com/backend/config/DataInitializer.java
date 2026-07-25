@@ -280,6 +280,74 @@ public class DataInitializer implements CommandLineRunner {
                 submissionRepository.save(submission);
             }
 
+            // 8. TẠO THÊM LÔ BÀI CHƯA PHÂN CÔNG (UNASSIGNED)
+            Exam examPE204 = examRepository.save(Exam.builder()
+                    .examCode("PE_MSS_Spring26")
+                    .term("Spring2026")
+                    .examType("RETAKE")
+                    .examPaperUrl("https://prm-assignment.s3.ap-southeast-1.amazonaws.com/mock-exam.pdf")
+                    .build());
+
+            Batch batchUnassigned = batchRepository.save(Batch.builder()
+                    .exam(examPE204)
+                    .campus(campusHN)
+                    .status(BatchStatus.PENDING)
+                    .build());
+
+            for (int i = 1; i <= 10; i++) {
+                String ho = hoList[random.nextInt(hoList.length)];
+                String dem = demList[random.nextInt(demList.length)];
+                String ten = tenList[random.nextInt(tenList.length)];
+                String studentId = "SE" + (190000 + i);
+
+                Student student = studentRepository.save(Student.builder()
+                        .studentId(studentId)
+                        .fullName(ho + " " + dem + " " + ten)
+                        .build());
+
+                submissionRepository.save(Submission.builder()
+                        .batch(batchUnassigned)
+                        .student(student)
+                        .file_url(dummyFilePath)
+                        .submissionTime(LocalDateTime.now().minusHours(i))
+                        .status(SubmissionStatus.NOT_GRADED)
+                        .build());
+            }
+
+            Exam examPE205 = examRepository.save(Exam.builder()
+                    .examCode("PE_SPA_Spring26")
+                    .term("Spring2026")
+                    .examType("FIRST_ATTEMPT")
+                    .examPaperUrl("https://prm-assignment.s3.ap-southeast-1.amazonaws.com/mock-exam.pdf")
+                    .build());
+
+            Batch batchGrader2 = batchRepository.save(Batch.builder()
+                    .exam(examPE205)
+                    .campus(campusHN)
+                    .grader(grader2)
+                    .status(BatchStatus.IN_PROGRESS)
+                    .build());
+
+            for (int i = 1; i <= 10; i++) {
+                String ho = hoList[random.nextInt(hoList.length)];
+                String dem = demList[random.nextInt(demList.length)];
+                String ten = tenList[random.nextInt(tenList.length)];
+                String studentId = "SE" + (180000 + i);
+
+                Student student = studentRepository.save(Student.builder()
+                        .studentId(studentId)
+                        .fullName(ho + " " + dem + " " + ten)
+                        .build());
+
+                submissionRepository.save(Submission.builder()
+                        .batch(batchGrader2)
+                        .student(student)
+                        .file_url(dummyFilePath)
+                        .submissionTime(LocalDateTime.now().minusHours(i))
+                        .status(SubmissionStatus.NOT_GRADED)
+                        .build());
+            }
+
             System.out.println("--- KHỞI TẠO DỮ LIỆU THÀNH CÔNG ---");
             System.out.println("Đã tạo 1 lô bài gồm 40 sinh viên, 1 lô lịch sử 10 bài hoàn thành, và 1 lô bài mới 10 bài chưa chấm.");
         }

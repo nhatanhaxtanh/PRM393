@@ -58,55 +58,43 @@ public class AdminController {
     }
 
     @PostMapping("/assign")
-    public ResponseEntity<?> assignBatchAndNotify(@RequestBody Map<String, String> payload) {
-        String examCode = payload.get("examCode");
-        String lecturerId = payload.get("lecturerId");
+    public ResponseEntity<?> assignBatchAndNotify(@RequestBody Map<String, Object> payload) {
+        Long batchId = Long.valueOf(payload.get("batchId").toString());
+        String lecturerId = (String) payload.get("lecturerId");
 
         try {
             Optional<User> graderOpt = userRepository.findByUsername(lecturerId);
             if (graderOpt.isEmpty()) {
-                return ResponseEntity.status(404).body(Map.of("status", 404, "error", "Không tìm thấy giảng viên " + lecturerId));
+                return ResponseEntity.status(404).body(Map.of("status", 404, "error", "Khong tim thay giang vien " + lecturerId));
             }
             User grader = graderOpt.get();
 
-            Exam exam = examRepository.findByExamCode(examCode).orElseGet(() ->
-                    examRepository.save(Exam.builder()
-                            .examCode(examCode)
-                            .term("Spring2026")
-                            .examType("FIRST_ATTEMPT")
-                            .build())
-            );
+            Optional<Batch> batchOpt = batchRepository.findById(batchId);
+            if (batchOpt.isEmpty()) {
+                return ResponseEntity.status(404).body(Map.of("status", 404, "error", "Khong tim thay lo bai " + batchId));
+            }
+            Batch batch = batchOpt.get();
 
-            Batch newBatch = Batch.builder()
-                    .exam(exam)
-                    .campus(grader.getCampus())
-                    .grader(grader)
-                    .status(BatchStatus.IN_PROGRESS)
-                    .build();
+            batch.setGrader(grader);
+            batch.setStatus(BatchStatus.IN_PROGRESS);
+            batchRepository.save(batch);
 
-            batchRepository.save(newBatch);
-
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("status", 500, "error", "Lỗi lưu Database: " + e.getMessage()));
-        }
-
-        String targetDeviceToken = System.getenv("TOKEN");
-
-        try {
-            Message message = Message.builder()
-                    .setToken(targetDeviceToken)
-                    .setNotification(Notification.builder()
-                            .setTitle("Phân công lô bài mới: " + examCode)
-                            .setBody("Hệ thống vừa giao cho bạn (" + lecturerId + ") lô bài " + examCode + ". Mở app để xem ngay!")
-                            .build())
-                    .build();
-
-            String response = FirebaseMessaging.getInstance().send(message);
-
-            return ResponseEntity.ok(Map.of("status", 200, "message", "Đã lưu Database & Push sent: " + response));
+            String examCode = batch.getExam().getExamCode();
+            String targetDeviceToken = System.getenv("TOKEN");
+            if (targetDeviceToken != null) {
+                Message message = Message.builder()
+                        .setToken(targetDeviceToken)
+                        .setNotification(Notification.builder()
+                                .setTitle("Phan cong lo bai: " + examCode)
+                                .setBody("He thong vua giao cho ban lo bai " + examCode + ". Mo app de xem ngay!")
+                                .build())
+                        .build();
+                FirebaseMessaging.getInstance().send(message);
+            }
+            return ResponseEntity.ok(Map.of("status", 200, "message", "Assign successfully"));
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("status", 500, "error", "Lỗi FCM: " + e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of("status", 500, "error", "Loi server: " + e.getMessage()));
         }
     }
 

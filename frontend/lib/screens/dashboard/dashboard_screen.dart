@@ -65,7 +65,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ReviewInfo? _selectedReview;
   UserProfile? _profile;
   StreamSubscription? _disableSubscription;
-  StreamSubscription? _remindSubscription;
   StreamSubscription? _batchUpdateSubscription;
 
   @override
@@ -74,7 +73,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     FirebaseAnalytics.instance.logEvent(name: 'view_dashboard');
     _loadProfile();
     _listenForAccountDisable();
-    _listenForReminders();
     _listenForBatchUpdates();
   }
 
@@ -147,38 +145,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _listenForReminders() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null && user.email != null) {
-      final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
-      _remindSubscription = FirebaseDatabase.instance
-          .ref('status/$key/remind_time')
-          .onValue
-          .listen((event) {
-            if (event.snapshot.value != null && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Row(
-                    children: [
-                      Icon(Icons.notifications_active, color: Colors.white),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '🔔 ADMIN ALERT: You have an urgent batch to grade!',
-                        ),
-                      ),
-                    ],
-                  ),
-                  backgroundColor: Colors.blue,
-                  duration: Duration(seconds: 5),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            }
-          });
-    }
-  }
-
   void _listenForBatchUpdates() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && user.email != null) {
@@ -187,45 +153,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .ref('status/$key/force_update')
           .onValue
           .listen((event) async {
-        if (event.snapshot.value != null && _selectedBatch != null) {
-          final batches = await BatchService.getAssignedBatches();
-          final stillExists =
-              batches.any((b) => b.batchId == _selectedBatch!.batchId);
+            if (event.snapshot.value != null &&
+                (_selectedBatch != null || _selectedReview != null)) {
+              final currentBatchId =
+                  _selectedBatch?.batchId ?? _selectedReview?.batchId;
+              final batches = await BatchService.getAssignedBatches();
+              final stillExists = batches.any(
+                (b) => b.batchId == currentBatchId,
+              );
 
-          if (!stillExists && mounted) {
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                title: const Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Text('System Alert'),
-                  ],
-                ),
-                content: const Text(
-                    'The current batch has been reassigned or cancelled by the admin.\nPlease return to dashboard.'),
-                actions: [
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      setState(() {
-                        _selectedBatch = null;
-                        _selectedReview = null;
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF97316),
-                        foregroundColor: Colors.white),
-                    child: const Text('Acknowledge'),
+              if (!stillExists && mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => AlertDialog(
+                    title: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                        SizedBox(width: 8),
+                        Text('System Alert'),
+                      ],
+                    ),
+                    content: const Text(
+                      'The current batch has been reassigned or cancelled by the admin.\nPlease return to dashboard.',
+                    ),
+                    actions: [
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _selectedBatch = null;
+                            _selectedReview = null;
+                            _selected = SidebarItem.dashboard;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF97316),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Acknowledge'),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }
-        }
-      });
+                );
+              }
+            }
+          });
     }
   }
 
@@ -233,7 +206,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _disableSubscription?.cancel();
-    _remindSubscription?.cancel();
     _batchUpdateSubscription?.cancel();
     super.dispose();
   }
@@ -434,6 +406,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _logout() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      final key = user.email!.replaceAll('@', '_').replaceAll('.', '_');
+      await PresenceService.setOffline(key);
+    }
     await FirebaseAuth.instance.signOut();
     AppSession.instance.clear();
     if (mounted) {

@@ -25,7 +25,7 @@ public class Batch {
     private Campus campus;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "grader_id", nullable = false)
+    @JoinColumn(name = "grader_id")
     private User grader; // Liên kết tới giảng viên
 
     @Enumerated(EnumType.STRING)

@@ -34,12 +34,17 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
   String _status = 'ALL';
 
   // Remote Config State
-  bool _isAIGradingEnabled = true; // Mặc định là bật
+  bool _isAIGradingEnabled = true;
+
+  int _completedCount = 0;
+  int _totalCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _initRemoteConfig(); // Gọi hàm cấu hình Firebase
+    _completedCount = widget.batch.completed;
+    _totalCount = widget.batch.total;
+    _initRemoteConfig(); 
     _loadSubmissions();
   }
 
@@ -86,9 +91,20 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
       keyword: _keyword,
       status: _status,
     );
+
+    final activeBatches = await BatchService.getAssignedBatches();
+    int newCompleted = _completedCount;
+    for (var b in activeBatches) {
+      if (b.batchId == widget.batch.batchId) {
+        newCompleted = b.gradedCount;
+        break;
+      }
+    }
+
     if (mounted) {
       setState(() {
         _submissions = submissions;
+        _completedCount = newCompleted;
         _loading = false;
       });
     }
@@ -281,7 +297,7 @@ class _BatchDetailScreenState extends State<BatchDetailScreen> {
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                   Text(
-                    '${widget.batch.completed}/${widget.batch.total}',
+                    '$_completedCount/$_totalCount',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,

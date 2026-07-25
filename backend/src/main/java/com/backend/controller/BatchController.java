@@ -218,7 +218,7 @@ public class BatchController {
                     .examType(batch.getExam().getExamType())
                     .totalStudents(total)
                     .gradedCount(graded)
-                    .graderName(batch.getGrader() != null ? batch.getGrader().getFullName() : "Chưa cập nhật")
+                    .graderName(batch.getGrader() != null ? batch.getGrader().getFullName() : "")
                     .graderEmail(batch.getGrader() != null ? batch.getGrader().getEmail() : "")
                     .build();
         }).collect(Collectors.toList());
