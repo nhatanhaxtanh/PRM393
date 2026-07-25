@@ -1,0 +1,11 @@
+yaml
+# .coderabbit.yaml
+language: "vi-VN"
+early_access: false
+reviews:
+  profile: "chill" # Dùng 'chill' để AI gợi ý nhẹ nhàng, đổi thành 'assertive' nếu muốn AI soi gắt từng lỗi nhỏ
+  request_changes_workflow: false # Tắt chế độ ép buộc sửa lỗi mới được merge
+  tone_and_style_guidelines: |
+    - Phân tích và giải thích logic một cách cặn kẽ để dễ dàng học hỏi.
+    - Tập trung vào các best practice của Spring Boot (Kiến trúc phân lớp, RESTful) và tối ưu giao diện Flutter (tránh rebuild UI không cần thiết).
+    - Cảnh báo nếu import thư viện rác hoặc vi phạm convention.
